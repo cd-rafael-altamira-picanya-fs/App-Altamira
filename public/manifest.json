@@ -1,0 +1,9 @@
+{
+  "name": "C.D. Rafael Altamira Picanya FS",
+  "short_name": "Altamira FS",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#111827",
+  "description": "Aplicación web progresiva (PWA) del C.D. Rafael Altamira Picanya FS"
+}
