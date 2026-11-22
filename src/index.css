@@ -1,0 +1,273 @@
+:root {
+  --primary: #0f294a;
+  --accent: #eab308;
+  --bg: #f1f5f9;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --danger: #dc2626;
+  --success: #16a34a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  padding-bottom: 84px;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--primary) 0%, #1e3a8a 100%);
+  color: white;
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.badge-escudo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--primary);
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border: 2px solid white;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.header p {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.admin-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.admin-btn.active {
+  background: var(--accent);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 15px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #dbeafe;
+  color: var(--primary);
+}
+
+.tag.urgent {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+.tag.result {
+  background: #dcfce7;
+  color: var(--success);
+}
+
+.match-teams {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.match-score {
+  background: var(--primary);
+  color: white;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.match-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.match-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dorsal {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--accent);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-danger {
+  background: #fee2e2;
+  color: var(--danger);
+  border: none;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.form-box {
+  background: #e2e8f0;
+  padding: 14px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-box input,
+.form-box select,
+.form-box textarea {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 14px;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0 12px;
+  z-index: 30;
+}
+
+.nav-item {
+  background: none;
+  border: none;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.nav-item.active {
+  color: var(--primary);
+}
+
+.status-pill {
+  font-size: 11px;
+  text-align: center;
+  color: var(--muted);
+  margin-top: 16px;
+}
