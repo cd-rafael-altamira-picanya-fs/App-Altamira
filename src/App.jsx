@@ -1298,4 +1298,504 @@ export default function App() {
                   </div>
                   <div className="rsvp-bar">
                     <span>Convocados: <strong>{asistentes.length}</strong></span>
-                    <div
+                    <div className="rsvp-btns">
+                      <button
+                        className={`btn-rsvp ${voy ? 'yes' : ''}`}
+                        onClick={() => toggleAsistencia(p)}
+                      >
+                        {voy ? '✓ Voy al partido' : 'Confirmar asistencia'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === 'liga' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Trophy size={19} /> Clasificación y Goles</h2>
+              {isAdmin && ligaSubtab === 'tabla' && (
+                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                  <Plus size={15} /> Equipo
+                </button>
+              )}
+            </div>
+
+            <div className="subtabs">
+              <button className={`subtab ${ligaSubtab === 'tabla' ? 'active' : ''}`} onClick={() => setLigaSubtab('tabla')}>
+                Tabla de Liga
+              </button>
+              <button className={`subtab ${ligaSubtab === 'goles' ? 'active' : ''}`} onClick={() => setLigaSubtab('goles')}>
+                Pichichi / Goles
+              </button>
+            </div>
+
+            {ligaSubtab === 'tabla' && (
+              <>
+                {isAdmin && showForm && (
+                  <form className="form-box" onSubmit={handleAddEquipoTabla}>
+                    <input placeholder="Nombre del equipo *" required value={nuevoEquipoTabla.equipo} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, equipo: e.target.value })} />
+                    <input type="number" placeholder="Partidos Jugados (PJ)" value={nuevoEquipoTabla.pj} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pj: e.target.value })} />
+                    <input type="number" placeholder="Puntos (PTS)" value={nuevoEquipoTabla.pts} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pts: e.target.value })} />
+                    <input type="number" placeholder="Goles a Favor (GF)" value={nuevoEquipoTabla.gf} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gf: e.target.value })} />
+                    <input type="number" placeholder="Goles en Contra (GC)" value={nuevoEquipoTabla.gc} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gc: e.target.value })} />
+                    <button type="submit" className="btn-primary">Añadir a la tabla</button>
+                  </form>
+                )}
+
+                <div className="card table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Equipo</th>
+                        <th>PJ</th>
+                        <th>GF/GC</th>
+                        <th>PTS</th>
+                        {isAdmin && <th></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clasificacion.map((c, idx) => (
+                        <tr key={c.id} className={c.equipo.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
+                          <td>{idx + 1}</td>
+                          <td>{c.equipo}</td>
+                          <td>{c.pj}</td>
+                          <td>{c.gf}:{c.gc}</td>
+                          <td><strong>{c.pts}</strong></td>
+                          {isAdmin && (
+                            <td>
+                              <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {ligaSubtab === 'goles' && (
+              <div>
+                {goleadoresOrdenados.map((j, idx) => (
+                  <div key={j.id} className="card player-row">
+                    <div className="player-info">
+                      <div className="avatar-column">
+                        <div className="avatar-circle">
+                          {j.foto ? <img src={j.foto} alt={j.nombre} /> : (j.nombre?.[0] || 'J')}
+                        </div>
+                        <span className="avatar-number-below">#{j.dorsal || (idx + 1)}</span>
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>
+                          {idx + 1}º · {j.nombre}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{j.categoria} · {j.posicion}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="tag result"><Award size={12} style={{ verticalAlign: 'middle' }} /> {j.goles || 0}</span>
+                      {isAdmin && (
+                        <>
+                          <button className="btn-rsvp" onClick={() => sumarGol(j, -1)}>-</button>
+                          <button className="btn-rsvp yes" onClick={() => sumarGol(j, 1)}>+</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'plantilla' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Shield size={19} /> Equipos y Plantilla</h2>
+              {isAdmin && (
+                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                  <Plus size={15} /> Jugador
+                </button>
+              )}
+            </div>
+
+            {isAdmin && showForm && (
+              <form className="form-box" onSubmit={handleAddJugador}>
+                <input placeholder="Dorsal / Número (ej. 10)" value={nuevoJugador.dorsal} onChange={(e) => setNuevoJugador({ ...nuevoJugador, dorsal: e.target.value })} />
+                <input placeholder="Nombre del jugador *" required value={nuevoJugador.nombre} onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })} />
+                <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
+                  <option value="Portero">Portero</option>
+                  <option value="Cierre">Cierre</option>
+                  <option value="Ala">Ala</option>
+                  <option value="Pívot">Pívot</option>
+                  <option value="Entrenador">Entrenador</option>
+                </select>
+                <input placeholder="Categoría (Senior, Juvenil...)" value={nuevoJugador.categoria} onChange={(e) => setNuevoJugador({ ...nuevoJugador, categoria: e.target.value })} />
+                <input type="number" placeholder="Goles iniciales" value={nuevoJugador.goles} onChange={(e) => setNuevoJugador({ ...nuevoJugador, goles: e.target.value })} />
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+                  Subir foto del jugador:
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setNuevoJugador({ ...nuevoJugador, foto: dataUrl }))}
+                  />
+                </label>
+                <button type="submit" className="btn-primary">Guardar Jugador</button>
+              </form>
+            )}
+
+            {plantilla.map((j) => (
+              <div key={j.id} className="card player-row">
+                <div className="player-info">
+                  <div className="avatar-column">
+                    <div className="avatar-circle">
+                      {j.foto ? <img src={j.foto} alt={j.nombre} /> : (j.nombre?.[0] || 'J')}
+                    </div>
+                    <span className="avatar-number-below">#{j.dorsal || '0'}</span>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      {j.posicion} · {j.categoria} · <strong>{j.goles || 0} goles</strong>
+                    </div>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button className="btn-danger" onClick={() => handleDelete('plantilla', j.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'chat' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><MessageCircle size={19} /> Chat del Club</h2>
+              <select
+                value={canalChat}
+                onChange={(e) => setCanalChat(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontWeight: 700 }}
+              >
+                <option value="General">Canal: General</option>
+                <option value="Senior">Canal: Senior</option>
+                <option value="Juvenil">Canal: Juvenil</option>
+                <option value="Cadete">Canal: Cadete</option>
+              </select>
+            </div>
+
+            <div className="chat-box">
+              {mensajesFiltrados.length === 0 && (
+                <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  No hay mensajes aún en <strong>{canalChat}</strong>. ¡Escribe el primero!
+                </div>
+              )}
+              {mensajesFiltrados.map((m) => {
+                const esMio = m.autor === perfil.nombre;
+                return (
+                  <div key={m.id} className={`msg ${esMio ? 'mine' : ''}`}>
+                    <div className="msg-head">
+                      <span>{m.autor} ({m.rol})</span>
+                      <span>
+                        {m.hora}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDelete('mensajes', m.id)}
+                            style={{ background: 'none', border: 'none', color: 'var(--danger)', marginLeft: 6, cursor: 'pointer' }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                    <div className="msg-text">{m.texto}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <form className="chat-input-row" onSubmit={handleSendChat}>
+              <input
+                placeholder={`Escribir como ${perfil.nombre}...`}
+                value={textoChat}
+                onChange={(e) => setTextoChat(e.target.value)}
+              />
+              <button type="submit" className="btn-primary"><Send size={16} /></button>
+            </form>
+          </div>
+        )}
+
+        {tab === 'avisos' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Bell size={19} /> Club y Avisos</h2>
+              {isAdmin && avisosSubtab === 'avisos' && (
+                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                  <Plus size={15} /> Aviso
+                </button>
+              )}
+            </div>
+
+            <div className="subtabs">
+              <button className={`subtab ${avisosSubtab === 'avisos' ? 'active' : ''}`} onClick={() => setAvisosSubtab('avisos')}>
+                Avisos
+              </button>
+              <button className={`subtab ${avisosSubtab === 'pistas' ? 'active' : ''}`} onClick={() => setAvisosSubtab('pistas')}>
+                Pabellones y Horarios
+              </button>
+            </div>
+
+            {avisosSubtab === 'avisos' && (
+              <>
+                {isAdmin && showForm && (
+                  <form className="form-box" onSubmit={handleAddAviso}>
+                    <input placeholder="Título del aviso *" required value={nuevoAviso.titulo} onChange={(e) => setNuevoAviso({ ...nuevoAviso, titulo: e.target.value })} />
+                    <textarea rows="3" placeholder="Mensaje para jugadores y familias *" required value={nuevoAviso.mensaje} onChange={(e) => setNuevoAviso({ ...nuevoAviso, mensaje: e.target.value })} />
+                    <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" style={{ width: 'auto' }} checked={nuevoAviso.urgente} onChange={(e) => setNuevoAviso({ ...nuevoAviso, urgente: e.target.checked })} />
+                      Marcar como Urgente
+                    </label>
+                    <button type="submit" className="btn-primary">Publicar Aviso</button>
+                  </form>
+                )}
+
+                {avisos.map((a) => (
+                  <div key={a.id} className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span className={`tag ${a.urgente ? 'urgent' : ''}`}>
+                        {a.urgente ? 'Urgente' : 'Comunicado'}
+                      </span>
+                      {isAdmin && (
+                        <button className="btn-danger" onClick={() => handleDelete('avisos', a.id)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{a.titulo}</h3>
+                    <p style={{ fontSize: 14, color: '#334155', lineHeight: 1.45 }}>{a.mensaje}</p>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {avisosSubtab === 'pistas' && (
+              <div>
+                {PABELLONES.map((pb) => (
+                  <div key={pb.nombre} className="card">
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{pb.nombre}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{pb.zona}</div>
+                    <a
+                      href={pb.mapa}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-primary"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <Navigation size={14} /> Abrir en Maps
+                    </a>
+                  </div>
+                ))}
+
+                {ENTRENOS.map((en) => (
+                  <div key={en.categoria} className="card">
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{en.categoria}</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{en.dias}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'perfil' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><User size={19} /> Perfiles del Club</h2>
+              <button type="button" className="btn-rsvp" onClick={handleCerrarSesion}>
+                <LogOut size={13} /> Cerrar sesión
+              </button>
+            </div>
+
+            <div className="subtabs">
+              <button className={`subtab ${perfilSubtab === 'mi-perfil' ? 'active' : ''}`} onClick={() => setPerfilSubtab('mi-perfil')}>
+                Mi Perfil
+              </button>
+              <button className={`subtab ${perfilSubtab === 'companeros' ? 'active' : ''}`} onClick={() => setPerfilSubtab('companeros')}>
+                Perfiles ({listaPerfilesVisibles.length})
+              </button>
+            </div>
+
+            {perfilSubtab === 'mi-perfil' && (
+              <>
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <div className="avatar-column">
+                    <div className="avatar-circle" style={{ width: 84, height: 84, fontSize: 24 }}>
+                      {perfil.foto ? <img src={perfil.foto} alt={perfil.nombre} /> : (perfil.nombre?.[0] || 'U')}
+                    </div>
+                    <span className="avatar-number-below">#{perfil.dorsal || '0'}</span>
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>{perfil.nombre}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{perfil.rol} · {perfil.categoria}</div>
+                  <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
+                    Editar foto, nombre, dorsal o contraseña
+                  </button>
+                </div>
+
+                {isAdmin && (
+                  <form className="card" onSubmit={handleCrearPerfilEspecialDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="section-title" style={{ fontSize: 15 }}>
+                      <UserPlus size={17} /> Perfiles Especiales Directiva ({perfilesEspecialesCreados.length}/{MAX_PERFILES_RESERVA_DIRECTIVA})
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      Crea hasta 4 perfiles (2 entrenadores y 2 de reserva) con acceso propio.
+                    </p>
+                    <select
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.tipoSlot}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, tipoSlot: e.target.value })}
+                    >
+                      <option value="Entrenador 1">Entrenador 1</option>
+                      <option value="Entrenador 2">Entrenador 2</option>
+                      <option value="Reserva 1">Reserva Directiva 1</option>
+                      <option value="Reserva 2">Reserva Directiva 2</option>
+                    </select>
+                    <input
+                      placeholder="Nombre o seudónimo *"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.nombre}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, nombre: e.target.value })}
+                      required
+                    />
+                    <input
+                      placeholder="Dorsal o número (ej. 0)"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.dorsal}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, dorsal: e.target.value })}
+                    />
+                    <input
+                      type="password"
+                      placeholder="Contraseña o PIN (mín. 4 caracteres) *"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.pinUsuario}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, pinUsuario: e.target.value })}
+                      required
+                    />
+                    <button type="submit" className="btn-primary">Crear Perfil Especial</button>
+                  </form>
+                )}
+
+                {isAdmin && (
+                  <form className="card" onSubmit={handleCambiarPinDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="section-title" style={{ fontSize: 15 }}>
+                      <KeyRound size={17} /> Cambiar PIN de Directiva
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="PIN actual de directiva"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={pinDirActualInput}
+                      onChange={(e) => setPinDirActualInput(e.target.value)}
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Nuevo PIN de directiva (mín. 4 caracteres)"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={pinDirNuevoInput}
+                      onChange={(e) => setPinDirNuevoInput(e.target.value)}
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Confirmar nuevo PIN de directiva"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={pinDirConfirmInput}
+                      onChange={(e) => setPinDirConfirmInput(e.target.value)}
+                      required
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="submit" className="btn-primary" style={{ flex: 1 }}>Actualizar PIN Directiva</button>
+                      <button type="button" className="btn-rsvp" onClick={handleRestablecerPinDirectiva}>Restablecer 1980</button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+
+            {perfilSubtab === 'companeros' && (
+              <div>
+                {listaPerfilesVisibles.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Aún no hay perfiles completados en el club.
+                  </div>
+                ) : (
+                  listaPerfilesVisibles.map((item) => (
+                    <div key={item.id} className="card player-row">
+                      <div className="player-info">
+                        <div className="avatar-column">
+                          <div className="avatar-circle">
+                            {item.foto ? <img src={item.foto} alt={item.nombre} /> : (item.nombre?.[0] || 'U')}
+                          </div>
+                          <span className="avatar-number-below">#{item.dorsal || '0'}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>
+                            {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                            {item.tipoSlot ? `${item.tipoSlot} · ` : ''}{item.rol} · {item.categoria}
+                          </div>
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <button className="btn-danger" onClick={() => handleDelete('perfiles', item.id)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="status-pill">
+          {firebaseOk ? '● Sincronizado con Firebase' : '○ Modo local activo'}
+        </div>
+      </main>
+
+      <nav className="bottom-nav">
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); }}>
+          <Calendar size={20} />
+          <span>Partidos</span>
+        </button>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); }}>
+          <Trophy size={20} />
+          <span>Liga/Goles</span>
+        </button>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); }}>
+          <Users size={20} />
+          <span>Plantilla</span>
+        </button>
+        <button className={`nav-item ${tab === 'chat' ? 'active' : ''}`} onClick={() => { setTab('chat'); setShowForm(false); }}>
+          <MessageCircle size={20} />
+          <span>Chat</span>
+        </button>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); }}>
+          <Bell size={20} />
+          <span>Avisos</span>
+        </button>
+      </nav>
+    </div>
+  );
+}
