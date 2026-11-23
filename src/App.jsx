@@ -154,6 +154,105 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
   );
 }
 
+function TarjetaMiPerfil({
+  perfil,
+  sinDorsalUsuarioActual,
+  handleAbrirEditarPerfil
+}) {
+  const fotoWrapRef = useRef(null);
+  const fotoImgRef = useRef(null);
+  const textoWrapRef = useRef(null);
+
+  useEffect(() => {
+    if (fotoWrapRef.current) {
+      fotoWrapRef.current.style.setProperty('width', '100%', 'important');
+      fotoWrapRef.current.style.setProperty('display', 'flex', 'important');
+      fotoWrapRef.current.style.setProperty('justify-content', 'center', 'important');
+      fotoWrapRef.current.style.setProperty('align-items', 'center', 'important');
+      fotoWrapRef.current.style.setProperty('margin-bottom', '14px', 'important');
+      fotoWrapRef.current.style.setProperty('position', 'relative', 'important');
+      fotoWrapRef.current.style.setProperty('z-index', '1', 'important');
+    }
+    if (fotoImgRef.current) {
+      fotoImgRef.current.style.setProperty('width', '72px', 'important');
+      fotoImgRef.current.style.setProperty('height', '72px', 'important');
+      fotoImgRef.current.style.setProperty('min-width', '72px', 'important');
+      fotoImgRef.current.style.setProperty('min-height', '72px', 'important');
+      fotoImgRef.current.style.setProperty('max-width', '72px', 'important');
+      fotoImgRef.current.style.setProperty('max-height', '72px', 'important');
+      fotoImgRef.current.style.setProperty('border-radius', '50%', 'important');
+      fotoImgRef.current.style.setProperty('object-fit', 'cover', 'important');
+      fotoImgRef.current.style.setProperty('object-position', 'center', 'important');
+      fotoImgRef.current.style.setProperty('display', 'block', 'important');
+      fotoImgRef.current.style.setProperty('margin', '0 auto', 'important');
+      fotoImgRef.current.style.setProperty('position', 'relative', 'important');
+      fotoImgRef.current.style.setProperty('float', 'none', 'important');
+    }
+    if (textoWrapRef.current) {
+      textoWrapRef.current.style.setProperty('width', '100%', 'important');
+      textoWrapRef.current.style.setProperty('display', 'flex', 'important');
+      textoWrapRef.current.style.setProperty('flex-direction', 'column', 'important');
+      textoWrapRef.current.style.setProperty('align-items', 'center', 'important');
+      textoWrapRef.current.style.setProperty('justify-content', 'center', 'important');
+      textoWrapRef.current.style.setProperty('text-align', 'center', 'important');
+      textoWrapRef.current.style.setProperty('gap', '6px', 'important');
+      textoWrapRef.current.style.setProperty('position', 'relative', 'important');
+      textoWrapRef.current.style.setProperty('z-index', '2', 'important');
+      textoWrapRef.current.style.setProperty('clear', 'both', 'important');
+    }
+  }, [perfil.foto, perfil.nombre, perfil.rol, perfil.categoria, perfil.dorsal]);
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div ref={fotoWrapRef}>
+        {perfil.foto ? (
+          <img
+            ref={fotoImgRef}
+            src={perfil.foto}
+            alt={perfil.nombre || 'Foto de perfil'}
+            style={{ border: '2px solid #cbd5e1' }}
+          />
+        ) : (
+          <div
+            ref={fotoImgRef}
+            style={{
+              backgroundColor: '#1e3a8a',
+              color: '#ffffff',
+              fontWeight: 800,
+              fontSize: 24,
+              border: '2px solid #cbd5e1',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {perfil.nombre?.[0] || 'U'}
+          </div>
+        )}
+      </div>
+
+      <div ref={textoWrapRef}>
+        {!sinDorsalUsuarioActual && perfil.dorsal && (
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
+            #{perfil.dorsal}
+          </div>
+        )}
+        <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a' }}>
+          {perfil.nombre}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>
+          {sinDorsalUsuarioActual
+            ? (perfil.categoria || perfil.rol)
+            : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
+        </div>
+        <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
+          Editar foto, nombre, dorsal o contraseña
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const DEMO_PARTIDOS = [
   {
     id: 'demo1',
@@ -1165,7 +1264,7 @@ export default function App() {
                   src={formFoto}
                   alt="Vista previa"
                   letra={formNombre?.[0] || 'J'}
-                  tamano={76}
+                  tamano={72}
                 />
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
                   Dorsal: #{formDorsal || '-'}
@@ -1295,7 +1394,7 @@ export default function App() {
                 src={formFoto}
                 alt="Vista previa"
                 letra={formNombre?.[0] || 'U'}
-                tamano={76}
+                tamano={72}
               />
               {!editandoEspecial && (
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
@@ -1834,70 +1933,11 @@ export default function App() {
 
             {perfilSubtab === 'mi-perfil' && (
               <>
-                <div className="card" style={{ padding: 20 }}>
-                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-                    {perfil.foto ? (
-                      <img
-                        src={perfil.foto}
-                        alt={perfil.nombre || 'Foto de perfil'}
-                        style={{
-                          width: 76,
-                          height: 76,
-                          minWidth: 76,
-                          minHeight: 76,
-                          maxWidth: 76,
-                          maxHeight: 76,
-                          borderRadius: '9999px',
-                          objectFit: 'cover',
-                          objectPosition: 'center',
-                          border: '2px solid #cbd5e1',
-                          display: 'block'
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 76,
-                          height: 76,
-                          minWidth: 76,
-                          minHeight: 76,
-                          maxWidth: 76,
-                          maxHeight: 76,
-                          borderRadius: '9999px',
-                          backgroundColor: '#1e3a8a',
-                          color: '#ffffff',
-                          fontWeight: 800,
-                          fontSize: 26,
-                          border: '2px solid #cbd5e1',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        {perfil.nombre?.[0] || 'U'}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ width: '100%', textAlign: 'center', display: 'block' }}>
-                    {!sinDorsalUsuarioActual && perfil.dorsal && (
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>
-                        #{perfil.dorsal}
-                      </div>
-                    )}
-                    <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a', marginBottom: 4, display: 'block' }}>
-                      {perfil.nombre}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, display: 'block' }}>
-                      {sinDorsalUsuarioActual
-                        ? (perfil.categoria || perfil.rol)
-                        : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
-                    </div>
-                    <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
-                      Editar foto, nombre, dorsal o contraseña
-                    </button>
-                  </div>
-                </div>
+                <TarjetaMiPerfil
+                  perfil={perfil}
+                  sinDorsalUsuarioActual={sinDorsalUsuarioActual}
+                  handleAbrirEditarPerfil={handleAbrirEditarPerfil}
+                />
 
                 {isAdmin && (
                   <form className="card" onSubmit={handleCrearPerfilEspecialDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
