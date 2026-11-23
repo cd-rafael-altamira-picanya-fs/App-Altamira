@@ -836,11 +836,34 @@ export default function App() {
 
   const handleAddJugador = async (e) => {
     e.preventDefault();
-    if (!nuevoJugador.nombre) return;
+    const dorsalLimpio = String(nuevoJugador.dorsal || '').trim();
+    const nombreLimpio = String(nuevoJugador.nombre || '').trim();
+    const categoriaLimpia = String(nuevoJugador.categoria || '').trim();
+
+    if (!dorsalLimpio) {
+      alert('El campo Dorsal / Número * es obligatorio.');
+      return;
+    }
+    if (!nombreLimpio) {
+      alert('El campo Nombre del jugador * es obligatorio.');
+      return;
+    }
+    if (!categoriaLimpia) {
+      alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    if (!nuevoJugador.foto) {
+      alert('El campo Subir foto del jugador: * es obligatorio.');
+      return;
+    }
+
     const item = {
       ...nuevoJugador,
-      dorsal: String(nuevoJugador.dorsal || '0').trim(),
-      goles: Number(nuevoJugador.goles || 0),
+      dorsal: dorsalLimpio,
+      nombre: nombreLimpio,
+      posicion: isAdmin ? (nuevoJugador.posicion || 'Ala') : 'Ala',
+      categoria: categoriaLimpia,
+      goles: isAdmin ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
       createdAt: serverTimestamp()
     };
     const idTemporal = `jug_${Date.now()}`;
@@ -1428,22 +1451,47 @@ export default function App() {
 
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddJugador}>
-                <input placeholder="Dorsal / Número (ej. 10)" value={nuevoJugador.dorsal} onChange={(e) => setNuevoJugador({ ...nuevoJugador, dorsal: e.target.value })} />
-                <input placeholder="Nombre del jugador *" required value={nuevoJugador.nombre} onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })} />
-                <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
-                  <option value="Portero">Portero</option>
-                  <option value="Cierre">Cierre</option>
-                  <option value="Ala">Ala</option>
-                  <option value="Pívot">Pívot</option>
-                  <option value="Entrenador">Entrenador</option>
-                </select>
-                <input placeholder="Categoría (Senior, Juvenil...)" value={nuevoJugador.categoria} onChange={(e) => setNuevoJugador({ ...nuevoJugador, categoria: e.target.value })} />
-                <input type="number" placeholder="Goles iniciales" value={nuevoJugador.goles} onChange={(e) => setNuevoJugador({ ...nuevoJugador, goles: e.target.value })} />
+                <input
+                  placeholder="Dorsal / Número (ej. 10) *"
+                  required
+                  value={nuevoJugador.dorsal}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, dorsal: e.target.value })}
+                />
+                <input
+                  placeholder="Nombre del jugador *"
+                  required
+                  value={nuevoJugador.nombre}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })}
+                />
+                {isAdmin && (
+                  <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
+                    <option value="Portero">Portero</option>
+                    <option value="Cierre">Cierre</option>
+                    <option value="Ala">Ala</option>
+                    <option value="Pívot">Pívot</option>
+                    <option value="Entrenador">Entrenador</option>
+                  </select>
+                )}
+                <input
+                  placeholder="Categoría (Senior, Juvenil...) *"
+                  required
+                  value={nuevoJugador.categoria}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, categoria: e.target.value })}
+                />
+                {isAdmin && (
+                  <input
+                    type="number"
+                    placeholder="Goles iniciales"
+                    value={nuevoJugador.goles}
+                    onChange={(e) => setNuevoJugador({ ...nuevoJugador, goles: e.target.value })}
+                  />
+                )}
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
-                  Subir foto del jugador:
+                  Subir foto del jugador: *
                   <input
                     type="file"
                     accept="image/*"
+                    required
                     onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setNuevoJugador({ ...nuevoJugador, foto: dataUrl }))}
                   />
                 </label>
