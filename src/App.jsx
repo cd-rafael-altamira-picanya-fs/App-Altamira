@@ -92,6 +92,41 @@ function detectarCategoriaImportada(texto) {
   return esFemenino ? 'Senior ♀' : 'Senior ♂';
 }
 
+function extraerFechaDeTexto(texto) {
+  const str = String(texto || '');
+  const matchFecha = str.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/);
+  if (!matchFecha) return '';
+  const dia = matchFecha[1].padStart(2, '0');
+  const mes = matchFecha[2].padStart(2, '0');
+  let anio = matchFecha[3];
+  if (anio.length === 2) anio = `20${anio}`;
+  const horaMatch = str.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+  return horaMatch ? `${dia}/${mes}/${anio} ${horaMatch[0]}` : `${dia}/${mes}/${anio}`;
+}
+
+function limpiarNombreRival(texto) {
+  let limpio = String(texto || '')
+    .replace(/\bJornada\s*\d+\s*\([^)]*\)/gi, '')
+    .replace(/\bJornada\s*\d+\b/gi, '')
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const low = limpio.toLowerCase();
+  if (
+    !limpio ||
+    low.includes('futsal') ||
+    low.includes('fútbol sala') ||
+    low.includes('futbol sala') ||
+    low.includes('grup ') ||
+    low.includes('grupo ')
+  ) {
+    return 'Rival por confirmar';
+  }
+  return limpio;
+}
+
 function parsearPartidosDesdeTexto(textoCrudo) {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
@@ -143,12 +178,17 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       return seg.length >= 2;
     });
 
-    const rival = candidatoRival || 'Rival por confirmar';
+    const rival = limpiarNombreRival(candidatoRival || 'Rival por confirmar');
     const clubLocal = 'C.D. Rafael Altamira FS';
     const local = esFuera ? rival : clubLocal;
     const visitante = esFuera ? clubLocal : rival;
     const categoria = detectarCategoriaImportada(linea);
-    const fechaCompleta = hora ? `${fechaActual} ${hora}` : fechaActual;
+    const fechaExtraida = extraerFechaDeTexto(linea);
+    const fechaCompleta = fechaExtraida
+      ? fechaExtraida
+      : hora
+      ? `${fechaActual} ${hora}`
+      : fechaActual;
     const pabellon = esFuera
       ? `Pabellón visitante (${rival})`
       : 'Pabellón Municipal Picanya';
@@ -182,8 +222,8 @@ function normalizarClavePartido(partido) {
 }
 
 function obtenerMarcaTiempoPartido(partido) {
-  const texto = String(partido?.fecha || '').trim();
-  if (!texto) return Number.MAX_SAFE_INTEGER;
+  const textoCompleto = `${partido?.fecha || ''} ${partido?.local || ''} ${partido?.visitante || ''}`.trim();
+  if (!textoCompleto) return Number.MAX_SAFE_INTEGER;
 
   const meses = {
     ene: 0, enero: 0,
@@ -200,26 +240,40 @@ function obtenerMarcaTiempoPartido(partido) {
     dic: 11, diciembre: 11
   };
 
-  const horaMatch = texto.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  const horaMatch = textoCompleto.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   const horas = horaMatch ? Number(horaMatch[1]) : 23;
   const minutos = horaMatch ? Number(horaMatch[2]) : 59;
 
-  const fechaSlash = texto.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
-  if (fechaSlash) {
-    const dia = Number(fechaSlash[1]);
-    const mes = Number(fechaSlash[2]) - 1;
-    let anio = fechaSlash[3] ? Number(fechaSlash[3]) : new Date().getFullYear();
+  const fechaCompletaMatch = textoCompleto.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/);
+  if (fechaCompletaMatch) {
+    const dia = Number(fechaCompletaMatch[1]);
+    const mes = Number(fechaCompletaMatch[2]) - 1;
+    let anio = Number(fechaCompletaMatch[3]);
     if (anio < 100) anio += 2000;
     const d = new Date(anio, mes, dia, horas, minutos, 0);
     if (!Number.isNaN(d.getTime())) return d.getTime();
   }
 
-  const limpio = texto
+  const fechaCortaMatch = textoCompleto.match(/\b(\d{1,2})[/-](\d{1,2})\b/);
+  if (fechaCortaMatch) {
+    const dia = Number(fechaCortaMatch[1]);
+    const mes = Number(fechaCortaMatch[2]) - 1;
+    const ahora = new Date();
+    let anio = ahora.getFullYear();
+    const candidata = new Date(anio, mes, dia, horas, minutos, 0);
+    if (candidata.getTime() < ahora.getTime() - 90 * 24 * 60 * 60 * 1000) {
+      anio += 1;
+    }
+    const d = new Date(anio, mes, dia, horas, minutos, 0);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+
+  const limpio = textoCompleto
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
-  const partes = limpio.split(/[\s,·]+/);
+  const partes = limpio.split(/[\s,·()]+/);
   let diaMes = null;
   let mesIdx = null;
 
@@ -1390,17 +1444,37 @@ export default function App() {
     const unicos = [];
 
     for (const cand of candidatos) {
-      const clave = normalizarClavePartido(cand);
-      if (!clave || clavesVistas.has(clave)) continue;
-      clavesVistas.add(clave);
-      unicos.push({
+      const rivalLimpio = limpiarNombreRival(
+        cand.visitante && cand.visitante !== 'C.D. Rafael Altamira FS'
+          ? cand.visitante
+          : cand.local
+      );
+      const localFinal = cand.local || 'C.D. Rafael Altamira FS';
+      const visitanteFinal =
+        cand.visitante && cand.visitante !== 'C.D. Rafael Altamira FS'
+          ? limpiarNombreRival(cand.visitante)
+          : cand.visitante || rivalLimpio;
+
+      const fechaDetectada =
+        cand.fecha && cand.fecha !== 'Próximamente'
+          ? cand.fecha
+          : extraerFechaDeTexto(`${cand.fecha || ''} ${cand.local || ''} ${cand.visitante || ''}`) ||
+            cand.fecha ||
+            'Por confirmar';
+
+      const itemLimpio = {
         categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
-        local: cand.local || 'C.D. Rafael Altamira FS',
-        visitante: cand.visitante || 'Rival por confirmar',
-        fecha: cand.fecha || 'Por confirmar',
+        local: localFinal === 'C.D. Rafael Altamira FS' ? localFinal : limpiarNombreRival(localFinal),
+        visitante: visitanteFinal,
+        fecha: fechaDetectada,
         pabellon: cand.pabellon || 'Pabellón Municipal Picanya',
         resultado: cand.resultado || 'VS'
-      });
+      };
+
+      const clave = normalizarClavePartido(itemLimpio);
+      if (!clave || clavesVistas.has(clave)) continue;
+      clavesVistas.add(clave);
+      unicos.push(itemLimpio);
     }
 
     if (unicos.length === 0) return 0;
