@@ -818,7 +818,7 @@ const DEMO_PARTIDOS = [
     local: 'Torrent FS',
     visitante: 'C.D. Rafael Altamira FS',
     fecha: 'Domingo 11:00',
-    pabellon: 'Pabellón El Vedat',
+    pabellon: 'Pabellón visitante (Torrent FS)',
     resultado: '3 - 5',
     asistentes: ['Alejandro R.']
   }
@@ -1671,32 +1671,33 @@ export default function App() {
       }
 
       const clubLocal = 'C.D. Rafael Altamira FS';
-      const localFinal =
-        esVisitanteAltamira && rivalLimpio !== 'Rival por confirmar'
-          ? rivalLimpio
-          : localCrudo && !esTextoFechaOJornada(localCrudo) && !esNombreInvalidoOResidual(localCrudo)
-          ? limpiarNombreRival(localCrudo)
-          : clubLocal;
+      const juegaFuera = Boolean(esVisitanteAltamira && !esLocalAltamira);
 
-      const visitanteFinal =
-        localFinal === clubLocal
-          ? rivalLimpio
-          : clubLocal;
+      const localFinal = juegaFuera
+        ? rivalLimpio
+        : clubLocal;
 
-      const esFuera = localFinal !== clubLocal;
-      const rivalReferencia = esFuera ? localFinal : visitanteFinal;
+      const visitanteFinal = juegaFuera
+        ? clubLocal
+        : rivalLimpio;
+
+      const pabellonCalculado = juegaFuera
+        ? `Pabellón visitante (${rivalLimpio})`
+        : 'Pabellón Municipal Picanya';
+
+      const pabellonFinal =
+        cand.pabellon &&
+        !esTextoFechaOJornada(cand.pabellon) &&
+        !(juegaFuera && /pabell[oó]n municipal picanya/i.test(cand.pabellon))
+          ? cand.pabellon
+          : pabellonCalculado;
 
       const itemLimpio = {
         categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
         local: localFinal,
         visitante: visitanteFinal,
         fecha: fechaDetectada,
-        pabellon:
-          cand.pabellon && !esTextoFechaOJornada(cand.pabellon)
-            ? cand.pabellon
-            : esFuera
-            ? `Pabellón visitante (${rivalReferencia})`
-            : 'Pabellón Municipal Picanya',
+        pabellon: pabellonFinal,
         resultado: cand.resultado || 'VS'
       };
 
@@ -2099,11 +2100,21 @@ export default function App() {
 
     const localTexto = esTextoFechaOJornada(p.local) ? 'Rival por confirmar' : p.local;
     const visitanteTexto = esTextoFechaOJornada(p.visitante) ? 'Rival por confirmar' : p.visitante;
-    const pabellonTexto = esTextoFechaOJornada(p.pabellon)
-      ? 'Pabellón por confirmar'
-      : String(p.pabellon || 'Picanya').replace(/\(([^)]*)\)/g, (_, inner) =>
-          esTextoFechaOJornada(inner) ? '(Rival por confirmar)' : `(${inner})`
-        );
+    const juegaFueraTarjeta =
+      esEquipoClubAltamira(visitanteTexto) && !esEquipoClubAltamira(localTexto);
+    const rivalTarjeta = juegaFueraTarjeta ? localTexto : visitanteTexto;
+    const pabellonBase =
+      p.pabellon &&
+      !esTextoFechaOJornada(p.pabellon) &&
+      !(juegaFueraTarjeta && /pabell[oó]n municipal picanya/i.test(p.pabellon))
+        ? String(p.pabellon)
+        : juegaFueraTarjeta
+        ? `Pabellón visitante (${rivalTarjeta})`
+        : 'Pabellón Municipal Picanya';
+
+    const pabellonTexto = pabellonBase.replace(/\(([^)]*)\)/g, (_, inner) =>
+      esTextoFechaOJornada(inner) ? '(Rival por confirmar)' : `(${inner})`
+    );
 
     return (
       <div
