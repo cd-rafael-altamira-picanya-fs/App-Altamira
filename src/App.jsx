@@ -58,7 +58,8 @@ const CATEGORIAS_CLUB = CATEGORIAS_BASE.flatMap((cat) => [
 ]);
 
 const URLS_POR_DEFECTO = [
-  'https://www.elbalondelacomunitat.es/equipo/905540140/partidos'
+  'https://www.elbalondelacomunitat.es/equipo/905540140/partidos',
+  'https://futbuteo.com/valencia/campo/pabellon-mpal-fuente-la-higuera'
 ];
 
 const TEXTO_MUESTRA_FFCV = `Jornada 8 (15-11-2026)
@@ -85,6 +86,27 @@ C.D. Rafael Altamira Picanya "A" - Santa Ana Algemesí C.D.`;
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
 const REGEX_SOLO_JORNADA = /^jornada\s*\d+(\s*\([^)]*\))?$/i;
+
+function obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTexto = '') {
+  const limpio = String(pabellonTexto || '').trim();
+  let consulta = limpio;
+
+  if (!consulta || /pabell[oó]n municipal picanya/i.test(consulta)) {
+    consulta = 'Pabellón Municipal Picanya, Valencia';
+  } else {
+    const matchVisitante = consulta.match(/^Pabell[oó]n visitante\s*\((.+)\)$/i);
+    if (matchVisitante) {
+      const rival = matchVisitante[1].trim();
+      if (/rival por confirmar/i.test(rival) && rivalTexto && !/rival por confirmar/i.test(rivalTexto)) {
+        consulta = `Pabellón ${rivalTexto.trim()}, Valencia`;
+      } else {
+        consulta = `Pabellón ${rival}, Valencia`;
+      }
+    }
+  }
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(consulta)}`;
+}
 
 function esNombreInvalidoOResidual(texto) {
   const limpio = String(texto || '')
@@ -164,6 +186,7 @@ function limpiarNombreRival(texto) {
     .replace(/\bJornada\s*\d+\s*\([^)]*\)/gi, '')
     .replace(/\bJornada\s*\d+\b/gi, '')
     .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, '')
+    .replace(/\b([01]?\d|2[0-3]):[0-5]\d\b/g, '')
     .replace(/\(\s*\)/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -224,6 +247,20 @@ function parsearPartidosDesdeTexto(textoCrudo) {
 
     const horaMatch = linea.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
     const hora = horaMatch ? horaMatch[0] : '';
+    const fechaEnLinea = extraerFechaDeTexto(linea);
+
+    if (
+      !linea.includes('-') &&
+      !linea.includes('–') &&
+      !linea.includes('—') &&
+      !/\bvs\.?\b/i.test(linea) &&
+      (fechaEnLinea || hora) &&
+      !esEquipoClubAltamira(linea)
+    ) {
+      const base = fechaEnLinea || fechaActual;
+      fechaActual = hora && !base.includes(hora) ? `${base} · ${hora}` : base;
+      continue;
+    }
 
     const partesGuion = linea.split(/\s+(?:-|–|—|vs\.?)\s+/i).map((s) => s.trim()).filter(Boolean);
     if (partesGuion.length >= 2) {
@@ -261,8 +298,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       }
 
       const rivalParaPabellon = esFuera ? local : visitante;
-      const fechaExtraida = extraerFechaDeTexto(linea);
-      const fechaBase = fechaExtraida || fechaActual;
+      const fechaBase = fechaEnLinea || fechaActual;
       const fechaCompleta =
         hora && !fechaBase.includes(hora) ? `${fechaBase} · ${hora}` : fechaBase;
 
@@ -317,8 +353,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
     const local = esFuera ? rival : clubLocal;
     const visitante = esFuera ? clubLocal : rival;
     const categoria = detectarCategoriaImportada(`${linea} ${jornadaActual}`);
-    const fechaExtraida = extraerFechaDeTexto(linea);
-    const fechaBase = fechaExtraida || fechaActual;
+    const fechaBase = fechaEnLinea || fechaActual;
     const fechaCompleta =
       hora && !fechaBase.includes(hora) ? `${fechaBase} · ${hora}` : fechaBase;
     const pabellon = esFuera
@@ -1838,7 +1873,7 @@ export default function App() {
       const añadidos = await registrarPartidosSinDuplicar(data.partidos || []);
       const avisoBloqueos =
         data.errores && data.errores.length > 0
-          ? `\nNota: algunas webs restringieron la lectura directa (${data.errores.map((e) => e.motivo).join(', ')}). Usa "Pegar texto" para esas.`
+          ? `\nNota: algunas webs cargan contenido dinámico o restringen lectura directa (${data.errores.map((e) => e.motivo).join(', ')}). Usa "Pegar texto" para esas.`
           : '';
 
       alert(
@@ -2116,6 +2151,8 @@ export default function App() {
       esTextoFechaOJornada(inner) ? '(Rival por confirmar)' : `(${inner})`
     );
 
+    const urlMaps = obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTarjeta);
+
     return (
       <div
         key={p.id}
@@ -2146,7 +2183,22 @@ export default function App() {
         </div>
         <div className="match-meta">
           <span><Clock size={13} /> {fechaRescatada}</span>
-          <span><MapPin size={13} /> {pabellonTexto}</span>
+          <a
+            href={urlMaps}
+            target="_blank"
+            rel="noreferrer"
+            title="Abrir ubicación en Google Maps"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              color: 'var(--primary)',
+              fontWeight: 700,
+              textDecoration: 'underline'
+            }}
+          >
+            <MapPin size={13} /> {pabellonTexto}
+          </a>
         </div>
         <div className="rsvp-bar">
           <span>Convocados: <strong>{asistentes.length}</strong></span>
@@ -2643,7 +2695,7 @@ export default function App() {
 
                 <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
                   <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                    Pega aquí las jornadas y enfrentamientos de la FFCV o del club y se añadirán sin duplicar:
+                    Pega aquí las jornadas o enfrentamientos de Futbuteo, FFCV o del club y se añadirán sin duplicar:
                   </p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
