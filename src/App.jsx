@@ -39,6 +39,16 @@ const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_RESERVA_DIRECTIVA = 4;
 
+const CATEGORIAS_CLUB = [
+  'Senior',
+  'Juvenil',
+  'Cadete',
+  'Infantil',
+  'Alevín',
+  'Benjamín',
+  'Prebenjamín'
+];
+
 function procesarFotoCircular(file, callback) {
   if (!file) return;
   const reader = new FileReader();
@@ -158,9 +168,10 @@ function perfilJugadorCompleto(p) {
   if (!p) return false;
   const nombreOk = Boolean(p.nombre && p.nombre.trim().length >= 2);
   const dorsalOk = Boolean(p.dorsal && String(p.dorsal).trim().length > 0);
+  const categoriaOk = Boolean(p.categoria && String(p.categoria).trim().length > 0);
   const fotoOk = Boolean(p.foto && p.foto.length > 0);
   const pinOk = Boolean(p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
-  return nombreOk && dorsalOk && fotoOk && pinOk;
+  return nombreOk && dorsalOk && categoriaOk && fotoOk && pinOk;
 }
 
 function leerListaLocal(clave, respaldo) {
@@ -239,6 +250,12 @@ export default function App() {
     pinUsuario: '',
     foto: ''
   });
+
+  const rolActual = String(perfil?.rol || '').toLowerCase();
+  const puedeGestionarAlaYGoles =
+    Boolean(isAdmin) ||
+    rolActual.includes('entrenador') ||
+    rolActual.includes('directiva');
 
   const guardarPerfilesLocal = (lista) => {
     setPerfilesClub(lista);
@@ -867,16 +884,16 @@ export default function App() {
       ...nuevoJugador,
       dorsal: dorsalLimpio,
       nombre: nombreLimpio,
-      posicion: isAdmin ? (nuevoJugador.posicion || 'Ala') : 'Ala',
+      posicion: puedeGestionarAlaYGoles ? (nuevoJugador.posicion || 'Ala') : 'Sin asignar',
       categoria: categoriaLimpia,
-      goles: isAdmin ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
+      goles: puedeGestionarAlaYGoles ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
       createdAt: serverTimestamp()
     };
     const idTemporal = `jug_${Date.now()}`;
     const actualizada = [...plantilla, { id: idTemporal, ...item }];
     guardarPlantillaLocal(actualizada);
     setShowForm(false);
-    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', goles: '0', foto: '' });
+    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', goles: '', foto: '' });
 
     if (firebaseOk) {
       try {
@@ -943,7 +960,7 @@ export default function App() {
         mapa.set(p.id, p);
       }
     });
-    if (perfil.nombre || perfil.dorsal || perfil.foto) {
+    if (perfil.nombre || perfil.dorsal || p.foto) {
       mapa.set(miIdPerfil, {
         id: miIdPerfil,
         nombre: perfil.nombre || 'Sin nombre',
@@ -1075,13 +1092,17 @@ export default function App() {
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
-                <input
+                <select
                   style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
-                  placeholder="Selecciona o escribe tu categoría (ej. Senior, Juvenil...) *"
                   value={formCategoria}
                   onChange={(e) => setFormCategoria(e.target.value)}
                   required
-                />
+                >
+                  <option value="">Selecciona tu categoría *</option>
+                  {CATEGORIAS_CLUB.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -1200,13 +1221,17 @@ export default function App() {
 
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
-              <input
+              <select
                 style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
-                placeholder="Selecciona o escribe tu categoría (ej. Senior, Juvenil...) *"
                 value={formCategoria}
                 onChange={(e) => setFormCategoria(e.target.value)}
                 required
-              />
+              >
+                <option value="">Selecciona tu categoría *</option>
+                {CATEGORIAS_CLUB.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -1460,7 +1485,7 @@ export default function App() {
                   value={nuevoJugador.nombre}
                   onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })}
                 />
-                {isAdmin && (
+                {puedeGestionarAlaYGoles && (
                   <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
                     <option value="Portero">Portero</option>
                     <option value="Cierre">Cierre</option>
@@ -1469,13 +1494,17 @@ export default function App() {
                     <option value="Entrenador">Entrenador</option>
                   </select>
                 )}
-                <input
-                  placeholder="Categoría (Senior, Juvenil...) *"
+                <select
                   required
                   value={nuevoJugador.categoria}
                   onChange={(e) => setNuevoJugador({ ...nuevoJugador, categoria: e.target.value })}
-                />
-                {isAdmin && (
+                >
+                  <option value="">Selecciona categoría *</option>
+                  {CATEGORIAS_CLUB.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                {puedeGestionarAlaYGoles && (
                   <input
                     type="number"
                     placeholder="Goles iniciales"
@@ -1508,7 +1537,8 @@ export default function App() {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      {j.posicion} · {j.categoria} · <strong>{j.goles || 0} goles</strong>
+                      {j.categoria}
+                      {puedeGestionarAlaYGoles ? ` · ${j.posicion} · ${j.goles || 0} goles` : ''}
                     </div>
                   </div>
                 </div>
