@@ -27,12 +27,22 @@ body {
 
 .signo-mujer {
   color: #ec4899 !important;
-  font-weight: 900;
+  font-weight: 900 !important;
+  font-size: 1.24em !important;
+  line-height: 1 !important;
+  display: inline-block;
+  -webkit-text-stroke: 0.6px #be185d;
+  text-shadow: 0 0 1px rgba(190, 24, 93, 0.45);
 }
 
 .signo-hombre {
   color: #2563eb !important;
-  font-weight: 900;
+  font-weight: 900 !important;
+  font-size: 1.24em !important;
+  line-height: 1 !important;
+  display: inline-block;
+  -webkit-text-stroke: 0.6px #1d4ed8;
+  text-shadow: 0 0 1px rgba(29, 78, 216, 0.45);
 }
 
 .selector-genero-grid {
