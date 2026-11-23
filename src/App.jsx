@@ -151,9 +151,23 @@ function normalizarCategoria(cat) {
 }
 
 function normalizarDorsal(dorsal) {
-  return String(dorsal || '')
+  const limpio = String(dorsal || '')
     .trim()
-    .replace(/^#/, '');
+    .replace(/^#/, '')
+    .replace(/^0+(?=\d)/, '');
+  return limpio;
+}
+
+function mismaCategoriaYDorsal(dorsalA, catA, dorsalB, catB) {
+  const d1 = normalizarDorsal(dorsalA);
+  const d2 = normalizarDorsal(dorsalB);
+  if (!d1 || !d2 || d1 === '0' || d2 === '0' || d1 !== d2) return false;
+
+  const c1 = normalizarCategoria(catA);
+  const c2 = normalizarCategoria(catB);
+  if (!c1 || !c2) return false;
+
+  return c1 === c2;
 }
 
 function procesarFotoCircular(file, callback) {
@@ -502,30 +516,46 @@ export default function App() {
     localStorage.setItem('cdra_perfiles_club', JSON.stringify(lista));
   };
 
-  const existeDorsalEnCategoria = (dorsalCandidato, categoriaCandidata, idAExcluir = '') => {
+  const existeDorsalEnCategoria = (dorsalCandidato, categoriaCandidata, idAExcluir = '', nombreAExcluir = '') => {
     const dNorm = normalizarDorsal(dorsalCandidato);
     const cNorm = normalizarCategoria(categoriaCandidata);
     if (!dNorm || dNorm === '0' || !cNorm) return false;
 
+    const nombreExcluido = String(nombreAExcluir || '').trim().toLowerCase();
+
     const chocaEnPerfiles = perfilesClub.some((item) => {
       if (esRolSinDorsal(item.rol)) return false;
       if (idAExcluir && item.id === idAExcluir) return false;
-      return (
-        normalizarDorsal(item.dorsal) === dNorm &&
-        normalizarCategoria(item.categoria) === cNorm
-      );
+      if (nombreExcluido && item.nombre && item.nombre.trim().toLowerCase() === nombreExcluido) {
+        return false;
+      }
+      return mismaCategoriaYDorsal(dNorm, cNorm, item.dorsal, item.categoria);
     });
 
     if (chocaEnPerfiles) return true;
 
     const idJugadorExcluido = idAExcluir ? `reg_${idAExcluir}` : '';
-    return plantilla.some((jug) => {
+    const chocaEnPlantilla = plantilla.some((jug) => {
       if (idJugadorExcluido && jug.id === idJugadorExcluido) return false;
-      return (
-        normalizarDorsal(jug.dorsal) === dNorm &&
-        normalizarCategoria(jug.categoria) === cNorm
-      );
+      if (nombreExcluido && jug.nombre && jug.nombre.trim().toLowerCase() === nombreExcluido) {
+        return false;
+      }
+      return mismaCategoriaYDorsal(dNorm, cNorm, jug.dorsal, jug.categoria);
     });
+
+    if (chocaEnPlantilla) return true;
+
+    if (perfil && !esRolSinDorsal(perfil.rol) && perfil.nombre) {
+      const idPerfilActivo = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '');
+      const mismoUsuario =
+        (idAExcluir && idPerfilActivo === idAExcluir) ||
+        (nombreExcluido && perfil.nombre.trim().toLowerCase() === nombreExcluido);
+      if (!mismoUsuario && mismaCategoriaYDorsal(dNorm, cNorm, perfil.dorsal, perfil.categoria)) {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
@@ -737,8 +767,11 @@ export default function App() {
     const idActualPerfil = perfil?.nombre
       ? crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '')
       : '';
-    if (!esEspecial && existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia, idActualPerfil)) {
-      alert(`Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. Elige otro dorsal.`);
+    if (
+      !esEspecial &&
+      existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia, idActualPerfil, perfil?.nombre || '')
+    ) {
+      alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
       return;
     }
     if (!esEspecial && !formFoto) {
@@ -1158,7 +1191,7 @@ export default function App() {
       return;
     }
     if (existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia)) {
-      alert(`Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
+      alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
       return;
     }
     if (!nuevoJugador.foto) {
