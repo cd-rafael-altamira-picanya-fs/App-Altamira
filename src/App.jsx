@@ -42,6 +42,7 @@ const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 const MAX_PARTIDOS_POR_IMPORTACION = 80;
 const MAX_EQUIPOS_CLASIFICACION = 60;
+const VENTANA_AVISO_URGENTE_PARTIDO_MS = 2 * 60 * 60 * 1000;
 
 const CATEGORIAS_BASE = [
   'Senior',
@@ -1121,13 +1122,15 @@ const DEMO_AVISOS = [
     id: 'a1',
     titulo: 'Convocatoria Jornada Fin de Semana',
     mensaje: 'Todos los convocados deben estar 45 minutos antes en el pabellón con equipación azul.',
-    urgente: true
+    urgente: true,
+    autor: 'Directiva'
   },
   {
     id: 'a2',
     titulo: 'Cuotas y Reconocimientos Médicos',
     mensaje: 'Recordamos entregar la ficha médica firmada en la oficina del club.',
-    urgente: false
+    urgente: false,
+    autor: 'Directiva'
   }
 ];
 
@@ -1210,6 +1213,17 @@ export default function App() {
   const [sincronizandoUrls, setSincronizandoUrls] = useState(false);
   const [escudoCargado, setEscudoCargado] = useState(true);
 
+  const [permisoNotifMovil, setPermisoNotifMovil] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'default';
+  });
+  const [alertaAvisoEntrante, setAlertaAvisoEntrante] = useState(null);
+  const avisosVistosRef = useRef(new Set());
+  const inicializadoAvisosRef = useRef(false);
+  const recordatoriosPartidoEnviadosRef = useRef(new Set(leerListaLocal('cdra_recordatorios_partido_enviados', [])));
+
   const [pinDirectiva, setPinDirectiva] = useState(() => {
     return localStorage.getItem('cdra_pin_directiva') || PIN_DIRECTIVA_INICIAL;
   });
@@ -1265,6 +1279,10 @@ export default function App() {
     Boolean(isAdmin) ||
     rolActual.includes('entrenador') ||
     rolActual.includes('directiva');
+  const puedePublicarAvisos =
+    Boolean(isAdmin) ||
+    rolActual.includes('entrenador') ||
+    rolActual.includes('directiva');
   const sinDorsalUsuarioActual = esRolSinDorsal(perfil?.rol);
 
   const [partidos, setPartidos] = useState(() => leerListaLocal('cdra_partidos_local', DEMO_PARTIDOS));
@@ -1272,6 +1290,104 @@ export default function App() {
   const [plantilla, setPlantilla] = useState(() => leerListaLocal('cdra_plantilla_local', DEMO_PLANTILLA));
   const [avisos, setAvisos] = useState(() => leerListaLocal('cdra_avisos_local', DEMO_AVISOS));
   const [mensajes, setMensajes] = useState(() => leerListaLocal('cdra_mensajes_local', DEMO_CHAT));
+
+  const dispararNotificacionMovilAviso = (avisoObj, etiquetaExtra = '') => {
+    if (!avisoObj) return;
+    setAlertaAvisoEntrante({
+      id: avisoObj.id || `noti_${Date.now()}`,
+      titulo: etiquetaExtra ? `${etiquetaExtra} · ${avisoObj.titulo || 'Aviso urgente'}` : (avisoObj.titulo || 'Nuevo aviso del club'),
+      mensaje: avisoObj.mensaje || '',
+      urgente: Boolean(avisoObj.urgente),
+      autor: avisoObj.autor || 'Directiva / Entrenador'
+    });
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const prefijo = avisoObj.urgente ? '🚨 URGENTE · ' : '🔔 ';
+        const tituloFinal = etiquetaExtra
+          ? `${prefijo}${etiquetaExtra}: ${avisoObj.titulo || 'Aviso urgente'}`
+          : `${prefijo}${avisoObj.titulo || 'Aviso C.D. Rafael Altamira'}`;
+        const noti = new Notification(tituloFinal, {
+          body: `${avisoObj.mensaje || ''}${avisoObj.autor ? ` (${avisoObj.autor})` : ''}`,
+          icon: '/escudo.png',
+          tag: avisoObj.id || `aviso_${Date.now()}`
+        });
+        noti.onclick = () => {
+          window.focus();
+          setTab('avisos');
+          setAvisosSubtab('avisos');
+        };
+      } catch {
+        // Fallback visual en pantalla si el navegador bloquea la llamada directa
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!sesionIniciada) return;
+
+    const comprobarRecordatorioUrgenteDosHorasAntes = () => {
+      const avisosUrgentes = (avisos || []).filter((a) => Boolean(a?.urgente));
+      if (avisosUrgentes.length === 0 || (partidos || []).length === 0) return;
+
+      const ahoraMs = Date.now();
+      let huboCambio = false;
+
+      for (const partido of partidos) {
+        if (esPartidoYaJugado(partido, ahoraMs)) continue;
+        const tsPartido = obtenerMarcaTiempoPartido(partido);
+        if (tsPartido === Number.MAX_SAFE_INTEGER) continue;
+
+        const tiempoRestanteMs = tsPartido - ahoraMs;
+        if (tiempoRestanteMs > 0 && tiempoRestanteMs <= VENTANA_AVISO_URGENTE_PARTIDO_MS) {
+          for (const avisoUrgente of avisosUrgentes) {
+            const claveRecordatorio = `${partido.id}__${avisoUrgente.id}`;
+            if (!recordatoriosPartidoEnviadosRef.current.has(claveRecordatorio)) {
+              recordatoriosPartidoEnviadosRef.current.add(claveRecordatorio);
+              huboCambio = true;
+              const rivalEtiqueta = esEquipoClubAltamira(partido.local)
+                ? partido.visitante
+                : partido.local;
+              const etiquetaPartido = `2h antes vs ${rivalEtiqueta || partido.categoria || 'Partido'}`;
+              dispararNotificacionMovilAviso(avisoUrgente, etiquetaPartido);
+            }
+          }
+        }
+      }
+
+      if (huboCambio) {
+        localStorage.setItem(
+          'cdra_recordatorios_partido_enviados',
+          JSON.stringify(Array.from(recordatoriosPartidoEnviadosRef.current))
+        );
+      }
+    };
+
+    comprobarRecordatorioUrgenteDosHorasAntes();
+    const intervalo = window.setInterval(comprobarRecordatorioUrgenteDosHorasAntes, 60 * 1000);
+    return () => window.clearInterval(intervalo);
+  }, [sesionIniciada, partidos, avisos]);
+
+  const solicitarPermisoNotificacionesMovil = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('Este navegador no soporta notificaciones nativas del sistema, pero verás las alertas destacadas dentro de la app.');
+      return;
+    }
+    try {
+      const resultado = await Notification.requestPermission();
+      setPermisoNotifMovil(resultado);
+      if (resultado === 'granted') {
+        new Notification('C.D. Rafael Altamira', {
+          body: 'Notificaciones activadas. Te avisaremos cuando haya un aviso nuevo o un aviso urgente 2 horas antes de cada partido.',
+          icon: '/escudo.png'
+        });
+      } else if (resultado === 'denied') {
+        alert('Has bloqueado las notificaciones del navegador. Puedes activarlas en los ajustes del sitio en tu móvil.');
+      }
+    } catch {
+      alert('No se pudo solicitar el permiso de notificaciones en este dispositivo.');
+    }
+  };
 
   const guardarPartidosLocal = (lista) => {
     setPartidos(lista);
@@ -1792,6 +1908,22 @@ export default function App() {
             const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
             setAvisos(docs);
             localStorage.setItem('cdra_avisos_local', JSON.stringify(docs));
+
+            if (!inicializadoAvisosRef.current) {
+              docs.forEach((item) => avisosVistosRef.current.add(item.id));
+              inicializadoAvisosRef.current = true;
+            } else {
+              const nuevosAvisos = docs.filter((item) => !avisosVistosRef.current.has(item.id));
+              docs.forEach((item) => avisosVistosRef.current.add(item.id));
+              if (nuevosAvisos.length > 0) {
+                const ultimo = nuevosAvisos[0];
+                const autorActual = (perfil?.nombre || '').trim().toLowerCase();
+                const autorAviso = (ultimo.autor || '').trim().toLowerCase();
+                if (!autorActual || !autorAviso || autorActual !== autorAviso) {
+                  dispararNotificacionMovilAviso(ultimo);
+                }
+              }
+            }
           }
         }
       );
@@ -1829,7 +1961,7 @@ export default function App() {
     } catch {
       setFirebaseOk(false);
     }
-  }, []);
+  }, [perfil?.nombre]);
 
   const toggleAdmin = () => {
     if (isAdmin) {
@@ -2389,16 +2521,30 @@ export default function App() {
 
   const handleAddAviso = async (e) => {
     e.preventDefault();
+    if (!puedePublicarAvisos) {
+      alert('Solo Directiva o un entrenador pueden publicar avisos.');
+      return;
+    }
     if (!nuevoAviso.titulo || !nuevoAviso.mensaje) return;
-    const item = { ...nuevoAviso, createdAt: serverTimestamp() };
+
+    const autorAviso = perfil.nombre || (isAdmin ? 'Directiva' : perfil.rol || 'Entrenador');
+    const item = {
+      ...nuevoAviso,
+      autor: autorAviso,
+      rolAutor: isAdmin ? 'Directiva' : (perfil.rol || 'Entrenador'),
+      createdAt: serverTimestamp()
+    };
     const idTemporal = `av_${Date.now()}`;
+    avisosVistosRef.current.add(idTemporal);
     const actualizada = [{ id: idTemporal, ...item }, ...avisos];
     guardarAvisosLocal(actualizada);
     setShowForm(false);
     setNuevoAviso({ titulo: '', mensaje: '', urgente: false });
+
     if (firebaseOk) {
       try {
         const ref = await addDoc(collection(db, 'avisos'), item);
+        avisosVistosRef.current.add(ref.id);
         guardarAvisosLocal(actualizada.map((a) => (a.id === idTemporal ? { ...a, id: ref.id } : a)));
       } catch {
         // Mantiene respaldo local
@@ -2951,6 +3097,35 @@ export default function App() {
       </header>
 
       <main className="container">
+        {alertaAvisoEntrante && (
+          <div
+            className="card"
+            style={{
+              border: alertaAvisoEntrante.urgente ? '2px solid var(--danger)' : '2px solid var(--primary)',
+              background: alertaAvisoEntrante.urgente ? '#fef2f2' : '#eff6ff',
+              marginBottom: 12
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span className={`tag ${alertaAvisoEntrante.urgente ? 'urgent' : ''}`}>
+                {alertaAvisoEntrante.urgente ? '🚨 Aviso Urgente' : '🔔 Nuevo Aviso del Club'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAlertaAvisoEntrante(null)}
+                style={{ background: 'none', border: 'none', fontWeight: 700, cursor: 'pointer', color: '#475569' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{alertaAvisoEntrante.titulo}</div>
+            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.4 }}>{alertaAvisoEntrante.mensaje}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+              Publicado por {alertaAvisoEntrante.autor}
+            </div>
+          </div>
+        )}
+
         {tab === 'partidos' && (
           <div>
             <div className="section-header">
@@ -3538,11 +3713,22 @@ export default function App() {
           <div>
             <div className="section-header">
               <h2 className="section-title"><Bell size={19} /> Club y Avisos</h2>
-              {isAdmin && avisosSubtab === 'avisos' && (
-                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-                  <Plus size={15} /> Aviso
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {permisoNotifMovil !== 'granted' && (
+                  <button type="button" className="btn-rsvp" onClick={solicitarPermisoNotificacionesMovil}>
+                    <Bell size={14} /> Activar alertas móvil
+                  </button>
+                )}
+                {puedePublicarAvisos && avisosSubtab === 'avisos' && (
+                  <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                    <Plus size={15} /> Aviso
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="card" style={{ fontSize: 12, color: 'var(--muted)', padding: '10px 12px' }}>
+              Recordatorio automático: si hay un aviso marcado como <strong>Urgente</strong>, se notifica también <strong>2 horas antes</strong> de cada partido programado.
             </div>
 
             <div className="subtabs">
@@ -3556,13 +3742,13 @@ export default function App() {
 
             {avisosSubtab === 'avisos' && (
               <>
-                {isAdmin && showForm && (
+                {puedePublicarAvisos && showForm && (
                   <form className="form-box" onSubmit={handleAddAviso}>
                     <input placeholder="Título del aviso *" required value={nuevoAviso.titulo} onChange={(e) => setNuevoAviso({ ...nuevoAviso, titulo: e.target.value })} />
                     <textarea rows="3" placeholder="Mensaje para jugadores y familias *" required value={nuevoAviso.mensaje} onChange={(e) => setNuevoAviso({ ...nuevoAviso, mensaje: e.target.value })} />
                     <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input type="checkbox" style={{ width: 'auto' }} checked={nuevoAviso.urgente} onChange={(e) => setNuevoAviso({ ...nuevoAviso, urgente: e.target.checked })} />
-                      Marcar como Urgente
+                      Marcar como Urgente (notifica al instante y 2h antes de cada partido)
                     </label>
                     <button type="submit" className="btn-primary">Publicar Aviso</button>
                   </form>
