@@ -404,10 +404,65 @@ function normalizarNombreEquipoClasificacion(nombre) {
   return s;
 }
 
+function esLineaCabeceraOEscudo(linea) {
+  const t = String(linea || '').trim();
+  if (!t) return true;
+  if (/^escudo\s+de\b/i.test(t)) return true;
+  if (/^#?\s*equipo\s+pts\b/i.test(t)) return true;
+  if (/^(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/i.test(t) && !/[a-z]{4,}/i.test(t.replace(/\b(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/gi, ''))) {
+    return true;
+  }
+  return false;
+}
+
 function esLineaSoloNumerosEstadistica(linea) {
   const limpio = String(linea || '').trim();
   if (!limpio) return false;
   return /^[+-]?\d+(?:\s+[+-]?\d+)+$/.test(limpio);
+}
+
+function limpiarNombreEquipoFinal(partes) {
+  const filtradas = partes
+    .map((p) => p.replace(/^escudo\s+de\s+/i, '').trim())
+    .filter((p) => p && !esLineaCabeceraOEscudo(p) && !/^\d{1,2}\.?$/.test(p));
+
+  let unido = '';
+  for (const parte of filtradas) {
+    if (!unido) {
+      unido = parte;
+      continue;
+    }
+    // Si es sufijo tipo "'A'" o "'B'" o "C.F." o "F.S."
+    if (/^['"]?[a-z0-9]{1,3}['"]?$/i.test(parte)) {
+      unido = `${unido} ${parte}`;
+      continue;
+    }
+    const unidoNorm = unido.toLowerCase().replace(/\s+/g, ' ');
+    const parteNorm = parte.toLowerCase().replace(/\s+/g, ' ');
+    // Si la línea repite el nombre completo o el inicio ya presente, no duplicar
+    if (parteNorm === unidoNorm || unidoNorm.endsWith(parteNorm)) {
+      continue;
+    }
+    unido = `${unido} ${parte}`;
+  }
+
+  // Si el texto pegado contiene el nombre duplicado pegado en el mismo string (ej. "F.S. Picassent 'B' F.S. Picassent 'B'")
+  const tokens = unido.replace(/\s+/g, ' ').trim();
+  const mitad = Math.floor(tokens.length / 2);
+  if (tokens.length > 12) {
+    for (let i = mitad; i >= 6; i--) {
+      const a = tokens.slice(0, i).trim();
+      const b = tokens.slice(i).trim();
+      if (a.length >= 6 && b.toLowerCase().startsWith(a.toLowerCase().slice(0, Math.min(a.length, 10)))) {
+        const restoB = b.slice(Math.min(a.length, 10)).trim();
+        if (!restoB || a.toLowerCase().includes(b.toLowerCase())) {
+          return a;
+        }
+      }
+    }
+  }
+
+  return tokens.replace(/\s{2,}/g, ' ').trim();
 }
 
 function parsearClasificacionDesdeTexto(textoCrudo) {
@@ -422,23 +477,9 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
 
   const finalizarFilaConNumeros = (nums) => {
     if (!nums || nums.length < 2) return;
-    let nombreFinal = lineasNombrePendientes
-      .filter((l) => !/^escudo\s+de\b/i.test(l))
-      .join(' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-
-    if (!nombreFinal) {
-      nombreFinal = lineasNombrePendientes
-        .map((l) => l.replace(/^escudo\s+de\s+/i, '').trim())
-        .join(' ')
-        .trim();
-    }
+    const nombreFinal = limpiarNombreEquipoFinal(lineasNombrePendientes);
 
     if (nombreFinal.length >= 2 && !/^\d+$/.test(nombreFinal)) {
-      // En las capturas de clasificación (PTS, PJ, PG, PE, PP, GF, GC, DIF):
-      // nums[0] = PTS, nums[1] = PJ, nums[5] = GF, nums[6] = GC (si hay >= 7 números)
-      // Si solo hay 2-4 números en línea corta: nums[0] = PJ, nums[1] = PTS, nums[2] = GF, nums[3] = GC
       let pts = 0;
       let pj = 0;
       let gf = 0;
@@ -471,37 +512,31 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
   };
 
   for (const linea of lineas) {
-    if (/^(#|equipo|club|pts|pj|pg|pe|pp|gf|gc|dif|clasificacion|clasificación)\b/i.test(linea) && !/\d/.test(linea)) {
+    if (esLineaCabeceraOEscudo(linea)) {
       continue;
     }
 
-    if (/^escudo\s+de\b/i.test(linea)) {
-      const nombreEscudo = linea.replace(/^escudo\s+de\s+/i, '').trim();
-      if (nombreEscudo && !lineasNombrePendientes.some((n) => n.toLowerCase() === nombreEscudo.toLowerCase())) {
-        lineasNombrePendientes.push(nombreEscudo);
-      }
+    // Si en una línea viene "Forma 1 Escudo de C.D. Corbera..."
+    const limpiaForma = linea.replace(/^forma\s+\d+\s+/i, '').trim();
+    if (esLineaCabeceraOEscudo(limpiaForma)) {
       continue;
     }
 
-    // Línea que contiene solo el número de posición (ej. "15" o "16")
-    if (/^\d{1,2}\.?$/.test(linea)) {
+    if (/^\d{1,2}\.?$/.test(limpiaForma)) {
       if (lineasNombrePendientes.length > 0) {
-        // Si había un equipo anterior sin números, lo descartamos limpio y arrancamos el nuevo
         lineasNombrePendientes = [];
       }
-      posPendiente = Number(linea.replace('.', ''));
+      posPendiente = Number(limpiaForma.replace('.', ''));
       continue;
     }
 
-    // Línea de números de estadística (ej. "1 9 0 1 8 25 60 -35" o "0 9 0 0 9 16 42 -26")
-    if (esLineaSoloNumerosEstadistica(linea)) {
-      const nums = linea.split(/\s+/).map(Number);
+    if (esLineaSoloNumerosEstadistica(limpiaForma)) {
+      const nums = limpiaForma.split(/\s+/).map(Number);
       finalizarFilaConNumeros(nums);
       continue;
     }
 
-    // Formato de una sola línea tipo "1 C.D. Corbera 25 9 8 1 0 59 10 +49"
-    const matchConPos = linea.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,7})$/);
+    const matchConPos = limpiaForma.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,7})$/);
     if (matchConPos) {
       const posNum = Number(matchConPos[1]);
       const equipoNombre = matchConPos[2].replace(/^escudo\s+de\s+/i, '').trim();
@@ -514,14 +549,12 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
       }
     }
 
-    // Si es una continuación corta como "'A'" o "'B'" tras el nombre del equipo
-    if (/^['"]?[a-z0-9]{1,3}['"]?$/i.test(linea) && lineasNombrePendientes.length > 0) {
-      lineasNombrePendientes.push(linea);
+    if (/^['"]?[a-z0-9]{1,3}['"]?$/i.test(limpiaForma) && lineasNombrePendientes.length > 0) {
+      lineasNombrePendientes.push(limpiaForma);
       continue;
     }
 
-    // Nombre de equipo (o fragmento del nombre)
-    lineasNombrePendientes.push(linea);
+    lineasNombrePendientes.push(limpiaForma);
   }
 
   return equipos;
@@ -1927,7 +1960,7 @@ export default function App() {
 
     for (const cand of candidatos) {
       if (nuevos.length >= MAX_EQUIPOS_CLASIFICACION) break;
-      const nombreEq = String(cand.equipo || '').trim();
+      const nombreEq = limpiarNombreEquipoFinal([String(cand.equipo || '').trim()]);
       const claveEq = normalizarNombreEquipoClasificacion(nombreEq);
       if (!nombreEq || !claveEq || clavesExistentes.has(claveEq)) continue;
 
@@ -2166,7 +2199,7 @@ export default function App() {
     if (!nuevoEquipoTabla.equipo) return;
     const item = {
       pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
-      equipo: nuevoEquipoTabla.equipo,
+      equipo: limpiarNombreEquipoFinal([nuevoEquipoTabla.equipo]),
       pj: Number(nuevoEquipoTabla.pj || 0),
       pts: Number(nuevoEquipoTabla.pts || 0),
       gf: Number(nuevoEquipoTabla.gf || 0),
@@ -3036,7 +3069,7 @@ export default function App() {
                       Importar clasificación completa (sin duplicados)
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                      Pega aquí la clasificación copiada desde El balón de la Comunitat o la federación (admite filas en varias líneas):
+                      Pega aquí la clasificación copiada desde El balón de la Comunitat o la federación:
                     </p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button
@@ -3063,8 +3096,8 @@ export default function App() {
                 {isAdmin && showForm && (
                   <form className="form-box" onSubmit={handleAddEquipoTabla}>
                     <input placeholder="Nombre del equipo *" required value={nuevoEquipoTabla.equipo} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, equipo: e.target.value })} />
-                    <input type="number" placeholder="Partidos Jugados (PJ)" value={nuevoEquipoTabla.pj} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pj: e.target.value })} />
                     <input type="number" placeholder="Puntos (PTS)" value={nuevoEquipoTabla.pts} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pts: e.target.value })} />
+                    <input type="number" placeholder="Partidos Jugados (PJ)" value={nuevoEquipoTabla.pj} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pj: e.target.value })} />
                     <input type="number" placeholder="Goles a Favor (GF)" value={nuevoEquipoTabla.gf} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gf: e.target.value })} />
                     <input type="number" placeholder="Goles en Contra (GC)" value={nuevoEquipoTabla.gc} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gc: e.target.value })} />
                     <button type="submit" className="btn-primary">Añadir a la tabla</button>
@@ -3077,9 +3110,9 @@ export default function App() {
                       <tr>
                         <th>#</th>
                         <th>Equipo</th>
+                        <th>PTS</th>
                         <th>PJ</th>
                         <th>GF/GC</th>
-                        <th>PTS</th>
                         {isAdmin && <th></th>}
                       </tr>
                     </thead>
@@ -3087,10 +3120,10 @@ export default function App() {
                       {clasificacion.map((c, idx) => (
                         <tr key={c.id} className={c.equipo.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
                           <td>{c.pos || idx + 1}</td>
-                          <td>{c.equipo}</td>
+                          <td style={{ fontWeight: 600 }}>{limpiarNombreEquipoFinal([c.equipo])}</td>
+                          <td><strong style={{ color: 'var(--primary)' }}>{c.pts}</strong></td>
                           <td>{c.pj}</td>
                           <td>{c.gf}:{c.gc}</td>
-                          <td><strong>{c.pts}</strong></td>
                           {isAdmin && (
                             <td>
                               <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
