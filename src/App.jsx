@@ -110,6 +110,7 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       boxRef.current.style.setProperty('max-width', px, 'important');
       boxRef.current.style.setProperty('max-height', px, 'important');
       boxRef.current.style.setProperty('border-radius', '9999px', 'important');
+      boxRef.current.style.setProperty('border', '3px solid #ec4899', 'important');
       boxRef.current.style.setProperty('overflow', 'hidden', 'important');
       boxRef.current.style.setProperty('position', 'relative', 'important');
       boxRef.current.style.setProperty('display', 'flex', 'important');
@@ -119,13 +120,10 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       boxRef.current.style.setProperty('margin', '0 auto', 'important');
     }
     if (imgRef.current) {
-      imgRef.current.style.setProperty('width', px, 'important');
-      imgRef.current.style.setProperty('height', px, 'important');
-      imgRef.current.style.setProperty('min-width', px, 'important');
-      imgRef.current.style.setProperty('min-height', px, 'important');
-      imgRef.current.style.setProperty('max-width', px, 'important');
-      imgRef.current.style.setProperty('max-height', px, 'important');
+      imgRef.current.style.setProperty('width', '100%', 'important');
+      imgRef.current.style.setProperty('height', '100%', 'important');
       imgRef.current.style.setProperty('border-radius', '9999px', 'important');
+      imgRef.current.style.setProperty('border', 'none', 'important');
       imgRef.current.style.setProperty('object-fit', 'cover', 'important');
       imgRef.current.style.setProperty('object-position', 'center', 'important');
       imgRef.current.style.setProperty('position', 'static', 'important');
@@ -142,7 +140,7 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
         color: '#ffffff',
         fontWeight: 800,
         fontSize: `${Math.max(13, Math.round(tamano * 0.36))}px`,
-        border: '2px solid #cbd5e1'
+        border: '3px solid #ec4899'
       }}
     >
       {src ? (
