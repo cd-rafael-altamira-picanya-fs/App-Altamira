@@ -960,7 +960,7 @@ export default function App() {
         mapa.set(p.id, p);
       }
     });
-    if (perfil.nombre || perfil.dorsal || p.foto) {
+    if (perfil.nombre || perfil.dorsal || perfil.foto) {
       mapa.set(miIdPerfil, {
         id: miIdPerfil,
         nombre: perfil.nombre || 'Sin nombre',
