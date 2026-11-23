@@ -1109,7 +1109,7 @@ export default function App() {
         mapa.set(p.id, p);
       }
     });
-    if (perfil.nombre || perfil.dorsal || p.foto || perfil.rol) {
+    if (perfil.nombre || perfil.dorsal || perfil.foto || perfil.rol) {
       const dorsalPerfil = String(perfil.dorsal || '').trim();
       mapa.set(miIdPerfil, {
         id: miIdPerfil,
