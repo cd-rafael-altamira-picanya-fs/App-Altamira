@@ -143,6 +143,19 @@ function esRolSinDorsal(rol) {
   return r.includes('entrenador') || r.includes('directiva') || r.includes('reserva');
 }
 
+function normalizarCategoria(cat) {
+  return String(cat || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function normalizarDorsal(dorsal) {
+  return String(dorsal || '')
+    .trim()
+    .replace(/^#/, '');
+}
+
 function procesarFotoCircular(file, callback) {
   if (!file) return;
   const reader = new FileReader();
@@ -489,6 +502,32 @@ export default function App() {
     localStorage.setItem('cdra_perfiles_club', JSON.stringify(lista));
   };
 
+  const existeDorsalEnCategoria = (dorsalCandidato, categoriaCandidata, idAExcluir = '') => {
+    const dNorm = normalizarDorsal(dorsalCandidato);
+    const cNorm = normalizarCategoria(categoriaCandidata);
+    if (!dNorm || dNorm === '0' || !cNorm) return false;
+
+    const chocaEnPerfiles = perfilesClub.some((item) => {
+      if (esRolSinDorsal(item.rol)) return false;
+      if (idAExcluir && item.id === idAExcluir) return false;
+      return (
+        normalizarDorsal(item.dorsal) === dNorm &&
+        normalizarCategoria(item.categoria) === cNorm
+      );
+    });
+
+    if (chocaEnPerfiles) return true;
+
+    const idJugadorExcluido = idAExcluir ? `reg_${idAExcluir}` : '';
+    return plantilla.some((jug) => {
+      if (idJugadorExcluido && jug.id === idJugadorExcluido) return false;
+      return (
+        normalizarDorsal(jug.dorsal) === dNorm &&
+        normalizarCategoria(jug.categoria) === cNorm
+      );
+    });
+  };
+
   const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
     if (esRolSinDorsal(perfilDatos.rol)) return;
     const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '')}`;
@@ -693,6 +732,13 @@ export default function App() {
     }
     if (!esEspecial && !categoriaLimpia) {
       alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    const idActualPerfil = perfil?.nombre
+      ? crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '')
+      : '';
+    if (!esEspecial && existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia, idActualPerfil)) {
+      alert(`Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. Elige otro dorsal.`);
       return;
     }
     if (!esEspecial && !formFoto) {
@@ -1109,6 +1155,10 @@ export default function App() {
     }
     if (!categoriaLimpia) {
       alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    if (existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia)) {
+      alert(`Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
       return;
     }
     if (!nuevoJugador.foto) {
