@@ -152,6 +152,15 @@ function esStaffPrioritario(perfilItem) {
   return esDirectiva(perfilItem) || esEntrenador(perfilItem) || Boolean(perfilItem?.esReservaDirectiva);
 }
 
+function esPerfilFemenino(perfilItem) {
+  const cat = String(perfilItem?.categoria || '').trim().toLowerCase();
+  const nombre = String(perfilItem?.nombre || '').trim().toLowerCase();
+  if (cat.endsWith('♀') || cat.includes('femenin')) return true;
+  if (cat.endsWith('♂') || cat.includes('masculin')) return false;
+  if (nombre.includes('femenin')) return true;
+  return false;
+}
+
 function esRolSinDorsal(rol) {
   const r = String(rol || '').toLowerCase();
   return r.includes('entrenador') || r.includes('directiva') || r.includes('reserva');
@@ -432,6 +441,7 @@ export default function App() {
   const [ligaSubtab, setLigaSubtab] = useState('tabla');
   const [avisosSubtab, setAvisosSubtab] = useState('avisos');
   const [perfilSubtab, setPerfilSubtab] = useState('mi-perfil');
+  const [generoPerfilesTab, setGeneroPerfilesTab] = useState('masculina');
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('cdra_admin_activa') === '1');
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -1286,7 +1296,13 @@ export default function App() {
   const mensajesFiltrados = mensajes.filter((m) => (m.canal || 'General') === canalChat);
 
   const miIdPerfil = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '');
-  const listaPerfilesVisibles = (() => {
+  const {
+    directivasVisibles,
+    entrenadoresVisibles,
+    usuariosMasculinosOrdenados,
+    usuariosFemeninosOrdenados,
+    totalPerfilesVisibles
+  } = (() => {
     const mapa = new Map();
     perfilesClub.forEach((p) => {
       if (p.nombre || p.dorsal || p.foto || p.rol) {
@@ -1310,16 +1326,73 @@ export default function App() {
     const todos = Array.from(mapa.values());
     const directivas = todos.filter((item) => esDirectiva(item));
     const entrenadores = todos.filter((item) => !esDirectiva(item) && esStaffPrioritario(item));
-    const restoUsuarios = todos
-      .filter((item) => !esDirectiva(item) && !esStaffPrioritario(item))
+    const restoUsuarios = todos.filter((item) => !esDirectiva(item) && !esStaffPrioritario(item));
+
+    const femeninos = restoUsuarios
+      .filter((item) => esPerfilFemenino(item))
       .sort((a, b) =>
         String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', {
           sensitivity: 'base'
         })
       );
 
-    return [...directivas, ...entrenadores, ...restoUsuarios];
+    const masculinos = restoUsuarios
+      .filter((item) => !esPerfilFemenino(item))
+      .sort((a, b) =>
+        String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', {
+          sensitivity: 'base'
+        })
+      );
+
+    return {
+      directivasVisibles: directivas,
+      entrenadoresVisibles: entrenadores,
+      usuariosMasculinosOrdenados: masculinos,
+      usuariosFemeninosOrdenados: femeninos,
+      totalPerfilesVisibles: todos.length
+    };
   })();
+
+  const usuariosPorGeneroActual =
+    generoPerfilesTab === 'femenina'
+      ? usuariosFemeninosOrdenados
+      : usuariosMasculinosOrdenados;
+
+  const renderFilaPerfil = (item) => {
+    const esEspecialItem = esRolSinDorsal(item.rol);
+    const dorsalItem = String(item.dorsal || '').trim();
+    return (
+      <div key={item.id} className="card player-row">
+        <div className="player-info">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
+            {!esEspecialItem && dorsalItem && dorsalItem !== '0' && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{dorsalItem}</span>
+            )}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {esEspecialItem ? (
+                <TextoConSignoGenero texto={item.categoria || item.rol} />
+              ) : (
+                <>
+                  {item.rol} · <TextoConSignoGenero texto={item.categoria || 'Sin categoría'} />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        {isAdmin && (
+          <button className="btn-danger" onClick={() => handleDelete('perfiles', item.id)}>
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const perfilesEspecialesCreados = perfilesClub.filter(
     (p) => p.esReservaDirectiva || esRolSinDorsal(p.rol)
@@ -2060,7 +2133,7 @@ export default function App() {
                 Mi Perfil
               </button>
               <button className={`subtab ${perfilSubtab === 'companeros' ? 'active' : ''}`} onClick={() => setPerfilSubtab('companeros')}>
-                Perfiles ({listaPerfilesVisibles.length})
+                Perfiles ({totalPerfilesVisibles})
               </button>
             </div>
 
@@ -2169,46 +2242,40 @@ export default function App() {
 
             {perfilSubtab === 'companeros' && (
               <div>
-                {listaPerfilesVisibles.length === 0 ? (
+                {totalPerfilesVisibles === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                     Aún no hay perfiles completados en el club.
                   </div>
                 ) : (
-                  listaPerfilesVisibles.map((item) => {
-                    const esEspecialItem = esRolSinDorsal(item.rol);
-                    const dorsalItem = String(item.dorsal || '').trim();
-                    return (
-                      <div key={item.id} className="card player-row">
-                        <div className="player-info">
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                            <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
-                            {!esEspecialItem && dorsalItem && dorsalItem !== '0' && (
-                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{dorsalItem}</span>
-                            )}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 15 }}>
-                              {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                              {esEspecialItem ? (
-                                <TextoConSignoGenero texto={item.categoria || item.rol} />
-                              ) : (
-                                <>
-                                  {item.rol} · <TextoConSignoGenero texto={item.categoria || 'Sin categoría'} />
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {isAdmin && (
-                          <button className="btn-danger" onClick={() => handleDelete('perfiles', item.id)}>
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                  <>
+                    {directivasVisibles.map((item) => renderFilaPerfil(item))}
+                    {entrenadoresVisibles.map((item) => renderFilaPerfil(item))}
+
+                    <div className="subtabs" style={{ marginTop: 14 }}>
+                      <button
+                        type="button"
+                        className={`subtab ${generoPerfilesTab === 'masculina' ? 'active' : ''}`}
+                        onClick={() => setGeneroPerfilesTab('masculina')}
+                      >
+                        Plantilla masculina ({usuariosMasculinosOrdenados.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`subtab ${generoPerfilesTab === 'femenina' ? 'active' : ''}`}
+                        onClick={() => setGeneroPerfilesTab('femenina')}
+                      >
+                        Plantilla femenina ({usuariosFemeninosOrdenados.length})
+                      </button>
+                    </div>
+
+                    {usuariosPorGeneroActual.length === 0 ? (
+                      <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                        No hay usuarios en {generoPerfilesTab === 'femenina' ? 'plantilla femenina' : 'plantilla masculina'}.
                       </div>
-                    );
-                  })
+                    ) : (
+                      usuariosPorGeneroActual.map((item) => renderFilaPerfil(item))
+                    )}
+                  </>
                 )}
               </div>
             )}
