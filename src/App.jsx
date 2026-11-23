@@ -84,13 +84,12 @@ C.F.S. L'Olleria La Vall d'Albaida "A" - C.D. Rafael Altamira Picanya "A"
 Jornada 14 (10-01-2027)
 C.D. Rafael Altamira Picanya "A" - Santa Ana Algemesí C.D.`;
 
-const TEXTO_MUESTRA_CLASIFICACION = `1 C.D. Rafael Altamira Picanya "A" 10 25 42 18
-2 C.D. Maguen Alfafar F.S. 10 22 38 21
-3 Maristas Cullera 10 19 31 24
-4 C.F.S. Aliança Quart de Poblet "A" 10 16 29 25
-5 C.D. Inter Marjal 10 14 27 28
-6 C.F.S. L'Olleria La Vall d'Albaida "A" 10 11 22 31
-7 Santa Ana Algemesí C.D. 10 8 19 35`;
+const TEXTO_MUESTRA_CLASIFICACION = `15 Escudo de C.D. Senabre 'B'
+C.D. Senabre 'B'
+1 9 0 1 8 25 60 -35
+16 Escudo de C.D. Rafael Altamira Picanya 'A'
+C.D. Rafael Altamira Picanya 'A'
+0 9 0 0 9 16 42 -26`;
 
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
@@ -405,6 +404,12 @@ function normalizarNombreEquipoClasificacion(nombre) {
   return s;
 }
 
+function esLineaSoloNumerosEstadistica(linea) {
+  const limpio = String(linea || '').trim();
+  if (!limpio) return false;
+  return /^[+-]?\d+(?:\s+[+-]?\d+)+$/.test(limpio);
+}
+
 function parsearClasificacionDesdeTexto(textoCrudo) {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
@@ -412,89 +417,118 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
     .filter(Boolean);
 
   const equipos = [];
+  let posPendiente = null;
+  let lineasNombrePendientes = [];
+
+  const finalizarFilaConNumeros = (nums) => {
+    if (!nums || nums.length < 2) return;
+    let nombreFinal = lineasNombrePendientes
+      .filter((l) => !/^escudo\s+de\b/i.test(l))
+      .join(' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    if (!nombreFinal) {
+      nombreFinal = lineasNombrePendientes
+        .map((l) => l.replace(/^escudo\s+de\s+/i, '').trim())
+        .join(' ')
+        .trim();
+    }
+
+    if (nombreFinal.length >= 2 && !/^\d+$/.test(nombreFinal)) {
+      // En las capturas de clasificación (PTS, PJ, PG, PE, PP, GF, GC, DIF):
+      // nums[0] = PTS, nums[1] = PJ, nums[5] = GF, nums[6] = GC (si hay >= 7 números)
+      // Si solo hay 2-4 números en línea corta: nums[0] = PJ, nums[1] = PTS, nums[2] = GF, nums[3] = GC
+      let pts = 0;
+      let pj = 0;
+      let gf = 0;
+      let gc = 0;
+
+      if (nums.length >= 7) {
+        pts = nums[0];
+        pj = nums[1];
+        gf = nums[5];
+        gc = nums[6];
+      } else {
+        pj = nums[0] ?? 0;
+        pts = nums[1] ?? 0;
+        gf = nums[2] ?? 0;
+        gc = nums[3] ?? 0;
+      }
+
+      equipos.push({
+        pos: posPendiente || equipos.length + 1,
+        equipo: nombreFinal,
+        pj,
+        pts,
+        gf,
+        gc
+      });
+    }
+
+    posPendiente = null;
+    lineasNombrePendientes = [];
+  };
 
   for (const linea of lineas) {
-    if (/^(pos|equipo|club|pj|pts|gf|gc|clasificacion|clasificación)\b/i.test(linea)) {
+    if (/^(#|equipo|club|pts|pj|pg|pe|pp|gf|gc|dif|clasificacion|clasificación)\b/i.test(linea) && !/\d/.test(linea)) {
       continue;
     }
 
-    // Formato tabular o separado por tabuladores / tuberías / múltiples espacios
-    // Ejemplo: "1  C.D. Rafael Altamira Picanya "A"  10  25  42  18" o "1 | Equipo | 10 | 25 | 42 | 18"
-    const columnas = linea.split(/\s*(?:\t|\|)\s*/).filter(Boolean);
-    if (columnas.length >= 3) {
-      let posNum = null;
-      let idxEquipo = 0;
-      if (/^\d{1,2}\.?$/.test(columnas[0])) {
-        posNum = Number(columnas[0].replace('.', ''));
-        idxEquipo = 1;
+    if (/^escudo\s+de\b/i.test(linea)) {
+      const nombreEscudo = linea.replace(/^escudo\s+de\s+/i, '').trim();
+      if (nombreEscudo && !lineasNombrePendientes.some((n) => n.toLowerCase() === nombreEscudo.toLowerCase())) {
+        lineasNombrePendientes.push(nombreEscudo);
       }
-      const equipoNombre = String(columnas[idxEquipo] || '').trim();
-      const nums = columnas
-        .slice(idxEquipo + 1)
-        .join(' ')
-        .match(/-?\d+/g)
-        ?.map(Number) || [];
-
-      if (equipoNombre.length >= 2 && nums.length >= 2) {
-        const pj = nums[0] ?? 0;
-        const pts = nums[1] ?? 0;
-        const gf = nums[2] ?? 0;
-        const gc = nums[3] ?? 0;
-        equipos.push({
-          pos: posNum || equipos.length + 1,
-          equipo: equipoNombre,
-          pj,
-          pts,
-          gf,
-          gc
-        });
-        continue;
-      }
+      continue;
     }
 
-    // Formato de línea única con posición inicial y números finales:
-    // "1 C.D. Rafael Altamira Picanya "A" 10 25 42 18" o "C.D. Maguen Alfafar F.S. 10 22"
-    const matchConPos = linea.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+(-?\d+(?:\s+-?\d+){1,6})$/);
+    // Línea que contiene solo el número de posición (ej. "15" o "16")
+    if (/^\d{1,2}\.?$/.test(linea)) {
+      if (lineasNombrePendientes.length > 0) {
+        // Si había un equipo anterior sin números, lo descartamos limpio y arrancamos el nuevo
+        lineasNombrePendientes = [];
+      }
+      posPendiente = Number(linea.replace('.', ''));
+      continue;
+    }
+
+    // Línea de números de estadística (ej. "1 9 0 1 8 25 60 -35" o "0 9 0 0 9 16 42 -26")
+    if (esLineaSoloNumerosEstadistica(linea)) {
+      const nums = linea.split(/\s+/).map(Number);
+      finalizarFilaConNumeros(nums);
+      continue;
+    }
+
+    // Formato de una sola línea tipo "1 C.D. Corbera 25 9 8 1 0 59 10 +49"
+    const matchConPos = linea.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,7})$/);
     if (matchConPos) {
       const posNum = Number(matchConPos[1]);
-      const equipoNombre = matchConPos[2].trim();
+      const equipoNombre = matchConPos[2].replace(/^escudo\s+de\s+/i, '').trim();
       const nums = matchConPos[3].trim().split(/\s+/).map(Number);
       if (equipoNombre.length >= 2 && nums.length >= 2) {
-        equipos.push({
-          pos: posNum,
-          equipo: equipoNombre,
-          pj: nums[0] ?? 0,
-          pts: nums[1] ?? 0,
-          gf: nums[2] ?? 0,
-          gc: nums[3] ?? 0
-        });
+        posPendiente = posNum;
+        lineasNombrePendientes = [equipoNombre];
+        finalizarFilaConNumeros(nums);
         continue;
       }
     }
 
-    const matchSinPos = linea.match(/^(.+?)\s+(-?\d+(?:\s+-?\d+){1,6})$/);
-    if (matchSinPos) {
-      const equipoNombre = matchSinPos[1].trim();
-      const nums = matchSinPos[2].trim().split(/\s+/).map(Number);
-      if (equipoNombre.length >= 2 && nums.length >= 2 && !/^\d+$/.test(equipoNombre)) {
-        equipos.push({
-          pos: equipos.length + 1,
-          equipo: equipoNombre,
-          pj: nums[0] ?? 0,
-          pts: nums[1] ?? 0,
-          gf: nums[2] ?? 0,
-          gc: nums[3] ?? 0
-        });
-      }
+    // Si es una continuación corta como "'A'" o "'B'" tras el nombre del equipo
+    if (/^['"]?[a-z0-9]{1,3}['"]?$/i.test(linea) && lineasNombrePendientes.length > 0) {
+      lineasNombrePendientes.push(linea);
+      continue;
     }
+
+    // Nombre de equipo (o fragmento del nombre)
+    lineasNombrePendientes.push(linea);
   }
 
   return equipos;
 }
 
 function normalizarEquipoClave(nombre) {
-  const s = normalizarNombreEquipoClasificacion(nombre);
-  return s;
+  return normalizarNombreEquipoClasificacion(nombre);
 }
 
 function normalizarFechaClave(fechaStr) {
@@ -1916,6 +1950,9 @@ export default function App() {
     }));
 
     const ordenada = [...clasificacion, ...nuevosConId].sort((a, b) => {
+      const posA = Number(a.pos || 999);
+      const posB = Number(b.pos || 999);
+      if (posA !== posB) return posA - posB;
       if (Number(b.pts || 0) !== Number(a.pts || 0)) {
         return Number(b.pts || 0) - Number(a.pts || 0);
       }
@@ -2136,7 +2173,7 @@ export default function App() {
       gc: Number(nuevoEquipoTabla.gc || 0)
     };
     const idTemporal = `eq_${Date.now()}`;
-    const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => b.pts - a.pts);
+    const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => Number(a.pos || 999) - Number(b.pos || 999));
     guardarClasificacionLocal(actualizada);
     setShowForm(false);
     setNuevoEquipoTabla({ pos: '', equipo: '', pj: '0', pts: '0', gf: '0', gc: '0' });
@@ -2999,7 +3036,7 @@ export default function App() {
                       Importar clasificación completa (sin duplicados)
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                      Pega aquí la clasificación desde El balón de la Comunitat o la federación (posición, equipo, PJ, PTS, GF, GC):
+                      Pega aquí la clasificación copiada desde El balón de la Comunitat o la federación (admite filas en varias líneas):
                     </p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button
@@ -3012,7 +3049,7 @@ export default function App() {
                     </div>
                     <textarea
                       rows="6"
-                      placeholder={`Ejemplo:\n1 C.D. Rafael Altamira Picanya "A" 10 25 42 18\n2 C.D. Maguen Alfafar F.S. 10 22 38 21`}
+                      placeholder={`Ejemplo:\n15 Escudo de C.D. Senabre 'B'\nC.D. Senabre 'B'\n1 9 0 1 8 25 60 -35`}
                       value={textoImportarClasificacion}
                       onChange={(e) => setTextoImportarClasificacion(e.target.value)}
                       required
@@ -3049,7 +3086,7 @@ export default function App() {
                     <tbody>
                       {clasificacion.map((c, idx) => (
                         <tr key={c.id} className={c.equipo.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
-                          <td>{idx + 1}</td>
+                          <td>{c.pos || idx + 1}</td>
                           <td>{c.equipo}</td>
                           <td>{c.pj}</td>
                           <td>{c.gf}:{c.gc}</td>
