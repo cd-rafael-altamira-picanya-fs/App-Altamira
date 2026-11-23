@@ -392,7 +392,8 @@ function parsearPartidosDesdeTexto(textoCrudo) {
 }
 
 function normalizarNombreEquipoClasificacion(nombre) {
-  const s = String(nombre || '')
+  const limpio = sanearNombreEquipoTabla(nombre);
+  const s = String(limpio || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -421,48 +422,64 @@ function esLineaSoloNumerosEstadistica(linea) {
   return /^[+-]?\d+(?:\s+[+-]?\d+)+$/.test(limpio);
 }
 
-function limpiarNombreEquipoFinal(partes) {
+function sanearNombreEquipoTabla(entrada) {
+  const partes = Array.isArray(entrada) ? entrada : [String(entrada || '')];
   const filtradas = partes
-    .map((p) => p.replace(/^escudo\s+de\s+/i, '').trim())
+    .flatMap((p) => String(p || '').split(/\r?\n/))
+    .map((p) =>
+      p
+        .replace(/^forma\s+\d+\s+/i, '')
+        .replace(/^escudo\s+de\s+/i, '')
+        .trim()
+    )
     .filter((p) => p && !esLineaCabeceraOEscudo(p) && !/^\d{1,2}\.?$/.test(p));
 
   let unido = '';
   for (const parte of filtradas) {
+    // Si la parte empieza por posición + "Escudo de ..."
+    const sinPosYEscudo = parte
+      .replace(/^\d{1,2}\s+escudo\s+de\s+/i, '')
+      .replace(/^escudo\s+de\s+/i, '')
+      .trim();
+
+    if (!sinPosYEscudo) continue;
+
     if (!unido) {
-      unido = parte;
+      unido = sinPosYEscudo;
       continue;
     }
-    // Si es sufijo tipo "'A'" o "'B'" o "C.F." o "F.S."
-    if (/^['"]?[a-z0-9]{1,3}['"]?$/i.test(parte)) {
-      unido = `${unido} ${parte}`;
+
+    if (/^['"]?[a-z0-9]{1,3}['"]?$/i.test(sinPosYEscudo)) {
+      unido = `${unido} ${sinPosYEscudo}`;
       continue;
     }
+
     const unidoNorm = unido.toLowerCase().replace(/\s+/g, ' ');
-    const parteNorm = parte.toLowerCase().replace(/\s+/g, ' ');
-    // Si la línea repite el nombre completo o el inicio ya presente, no duplicar
+    const parteNorm = sinPosYEscudo.toLowerCase().replace(/\s+/g, ' ');
     if (parteNorm === unidoNorm || unidoNorm.endsWith(parteNorm)) {
       continue;
     }
-    unido = `${unido} ${parte}`;
+    unido = `${unido} ${sinPosYEscudo}`;
   }
 
-  // Si el texto pegado contiene el nombre duplicado pegado en el mismo string (ej. "F.S. Picassent 'B' F.S. Picassent 'B'")
-  const tokens = unido.replace(/\s+/g, ' ').trim();
-  const mitad = Math.floor(tokens.length / 2);
-  if (tokens.length > 12) {
-    for (let i = mitad; i >= 6; i--) {
-      const a = tokens.slice(0, i).trim();
-      const b = tokens.slice(i).trim();
-      if (a.length >= 6 && b.toLowerCase().startsWith(a.toLowerCase().slice(0, Math.min(a.length, 10)))) {
-        const restoB = b.slice(Math.min(a.length, 10)).trim();
-        if (!restoB || a.toLowerCase().includes(b.toLowerCase())) {
-          return a;
-        }
+  let limpio = unido.replace(/\s{2,}/g, ' ').trim();
+
+  // Quita repeticiones consecutivas de palabras o frases (ej. "F.S. Picassent 'B' F.S. Picassent 'B'")
+  const mitad = Math.floor(limpio.length / 2);
+  if (limpio.length >= 10) {
+    for (let len = mitad; len >= 6; len--) {
+      const candidata = limpio.slice(0, len).trim();
+      if (!candidata) continue;
+      const escaped = candidata.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regexRepetido = new RegExp(`^${escaped}\\s+${escaped}(?:\\s+${escaped})*$`, 'i');
+      if (regexRepetido.test(limpio)) {
+        limpio = candidata;
+        break;
       }
     }
   }
 
-  return tokens.replace(/\s{2,}/g, ' ').trim();
+  return limpio.trim();
 }
 
 function parsearClasificacionDesdeTexto(textoCrudo) {
@@ -477,7 +494,7 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
 
   const finalizarFilaConNumeros = (nums) => {
     if (!nums || nums.length < 2) return;
-    const nombreFinal = limpiarNombreEquipoFinal(lineasNombrePendientes);
+    const nombreFinal = sanearNombreEquipoTabla(lineasNombrePendientes);
 
     if (nombreFinal.length >= 2 && !/^\d+$/.test(nombreFinal)) {
       let pts = 0;
@@ -516,7 +533,6 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
       continue;
     }
 
-    // Si en una línea viene "Forma 1 Escudo de C.D. Corbera..."
     const limpiaForma = linea.replace(/^forma\s+\d+\s+/i, '').trim();
     if (esLineaCabeceraOEscudo(limpiaForma)) {
       continue;
@@ -539,7 +555,7 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
     const matchConPos = limpiaForma.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,7})$/);
     if (matchConPos) {
       const posNum = Number(matchConPos[1]);
-      const equipoNombre = matchConPos[2].replace(/^escudo\s+de\s+/i, '').trim();
+      const equipoNombre = sanearNombreEquipoTabla([matchConPos[2]]);
       const nums = matchConPos[3].trim().split(/\s+/).map(Number);
       if (equipoNombre.length >= 2 && nums.length >= 2) {
         posPendiente = posNum;
@@ -1038,10 +1054,10 @@ const DEMO_PARTIDOS = [
 ];
 
 const DEMO_CLASIFICACION = [
-  { id: 'c1', pos: 1, equipo: 'C.D. Rafael Altamira FS', pj: 10, pts: 25, gf: 42, gc: 18 },
-  { id: 'c2', pos: 2, equipo: 'Torrent FS', pj: 10, pts: 22, gf: 38, gc: 21 },
-  { id: 'c3', pos: 3, equipo: 'Picanya Futsal B', pj: 10, pts: 19, gf: 31, gc: 24 },
-  { id: 'c4', pos: 4, equipo: 'Paiporta FS', pj: 10, pts: 15, gf: 27, gc: 30 }
+  { id: 'c1', pos: 1, equipo: 'C.D. Rafael Altamira FS', pj: 10, pts: 25, gf: 42, gc: 18, escudo: '' },
+  { id: 'c2', pos: 2, equipo: 'Torrent FS', pj: 10, pts: 22, gf: 38, gc: 21, escudo: '' },
+  { id: 'c3', pos: 3, equipo: 'Picanya Futsal B', pj: 10, pts: 19, gf: 31, gc: 24, escudo: '' },
+  { id: 'c4', pos: 4, equipo: 'Paiporta FS', pj: 10, pts: 15, gf: 27, gc: 30, escudo: '' }
 ];
 
 const DEMO_PLANTILLA = [
@@ -1960,7 +1976,7 @@ export default function App() {
 
     for (const cand of candidatos) {
       if (nuevos.length >= MAX_EQUIPOS_CLASIFICACION) break;
-      const nombreEq = limpiarNombreEquipoFinal([String(cand.equipo || '').trim()]);
+      const nombreEq = sanearNombreEquipoTabla([String(cand.equipo || '').trim()]);
       const claveEq = normalizarNombreEquipoClasificacion(nombreEq);
       if (!nombreEq || !claveEq || clavesExistentes.has(claveEq)) continue;
 
@@ -1971,7 +1987,8 @@ export default function App() {
         pj: Number(cand.pj || 0),
         pts: Number(cand.pts || 0),
         gf: Number(cand.gf || 0),
-        gc: Number(cand.gc || 0)
+        gc: Number(cand.gc || 0),
+        escudo: cand.escudo || ''
       });
     }
 
@@ -2028,6 +2045,43 @@ export default function App() {
     setTextoImportarClasificacion('');
     setShowImportTablaBox(false);
     alert(`¡Se importaron ${añadidos} equipo(s) a la clasificación sin duplicados!`);
+  };
+
+  const handleLimpiarTablaCompleta = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm('¿Vaciar toda la tabla de clasificación para volver a importarla limpia?')) {
+      return;
+    }
+    const anteriores = [...clasificacion];
+    guardarClasificacionLocal([]);
+    if (firebaseOk) {
+      for (const item of anteriores) {
+        if (!/^c\d+$/.test(item.id)) {
+          try {
+            await deleteDoc(doc(db, 'clasificacion', item.id));
+          } catch {
+            // Ignora si no existía en Firestore
+          }
+        }
+      }
+    }
+  };
+
+  const handleSubirEscudoEquipo = async (equipoItem, file) => {
+    if (!isAdmin || !file) return;
+    procesarFotoCircular(file, async (dataUrl) => {
+      const actualizada = clasificacion.map((c) =>
+        c.id === equipoItem.id ? { ...c, escudo: dataUrl } : c
+      );
+      guardarClasificacionLocal(actualizada);
+      if (firebaseOk && !/^c\d+$/.test(equipoItem.id)) {
+        try {
+          await updateDoc(doc(db, 'clasificacion', equipoItem.id), { escudo: dataUrl });
+        } catch {
+          // Mantiene respaldo local
+        }
+      }
+    });
   };
 
   const handleLimpiarDuplicadosPartidos = async () => {
@@ -2199,11 +2253,12 @@ export default function App() {
     if (!nuevoEquipoTabla.equipo) return;
     const item = {
       pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
-      equipo: limpiarNombreEquipoFinal([nuevoEquipoTabla.equipo]),
+      equipo: sanearNombreEquipoTabla([nuevoEquipoTabla.equipo]),
       pj: Number(nuevoEquipoTabla.pj || 0),
       pts: Number(nuevoEquipoTabla.pts || 0),
       gf: Number(nuevoEquipoTabla.gf || 0),
-      gc: Number(nuevoEquipoTabla.gc || 0)
+      gc: Number(nuevoEquipoTabla.gc || 0),
+      escudo: ''
     };
     const idTemporal = `eq_${Date.now()}`;
     const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => Number(a.pos || 999) - Number(b.pos || 999));
@@ -3031,6 +3086,13 @@ export default function App() {
                   <button
                     type="button"
                     className="btn-rsvp"
+                    onClick={handleLimpiarTablaCompleta}
+                  >
+                    <Trash2 size={14} /> Limpiar tabla
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
                     onClick={() => {
                       setShowImportTablaBox(!showImportTablaBox);
                       setShowForm(false);
@@ -3117,22 +3179,57 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {clasificacion.map((c, idx) => (
-                        <tr key={c.id} className={c.equipo.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
-                          <td>{c.pos || idx + 1}</td>
-                          <td style={{ fontWeight: 600 }}>{limpiarNombreEquipoFinal([c.equipo])}</td>
-                          <td><strong style={{ color: 'var(--primary)' }}>{c.pts}</strong></td>
-                          <td>{c.pj}</td>
-                          <td>{c.gf}:{c.gc}</td>
-                          {isAdmin && (
+                      {clasificacion.map((c, idx) => {
+                        const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
+                        return (
+                          <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
+                            <td>{c.pos || idx + 1}</td>
                             <td>
-                              <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
-                                <Trash2 size={12} />
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <AvatarCircular
+                                  src={c.escudo}
+                                  alt={nombreLimpio}
+                                  letra={nombreLimpio?.[0] || 'E'}
+                                  tamano={28}
+                                />
+                                <span style={{ fontWeight: 600 }}>{nombreLimpio}</span>
+                                {isAdmin && (
+                                  <label
+                                    title="Subir escudo del equipo"
+                                    style={{
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      padding: 4,
+                                      borderRadius: 6,
+                                      border: '1px solid var(--border)',
+                                      background: '#fff'
+                                    }}
+                                  >
+                                    <Camera size={12} />
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      style={{ display: 'none' }}
+                                      onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
+                                    />
+                                  </label>
+                                )}
+                              </div>
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td><strong style={{ color: 'var(--primary)' }}>{c.pts}</strong></td>
+                            <td>{c.pj}</td>
+                            <td>{c.gf}:{c.gc}</td>
+                            {isAdmin && (
+                              <td>
+                                <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
