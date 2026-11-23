@@ -24,9 +24,7 @@ import {
   Trophy,
   Lock,
   Unlock,
-  MessageCircle,
   User,
-  Send,
   Award,
   Camera,
   KeyRound,
@@ -1173,17 +1171,6 @@ const DEMO_AVISOS = [
   }
 ];
 
-const DEMO_CHAT = [
-  {
-    id: 'm1',
-    autor: 'Entrenador Senior',
-    rol: 'Cuerpo Técnico',
-    canal: 'General',
-    texto: '¡Buenas equipo! Recordad confirmar asistencia en la pestaña Partidos.',
-    hora: '18:10'
-  }
-];
-
 const PABELLONES = [
   {
     nombre: 'Pabellón Municipal de Picanya',
@@ -1251,10 +1238,14 @@ function deduplicarPerfilesLista(lista) {
 }
 
 export default function App() {
-  const [tab, setTabState] = useState(() => localStorage.getItem('cdra_tab_activa') || 'partidos');
+  const [tab, setTabState] = useState(() => {
+    const savedTab = localStorage.getItem('cdra_tab_activa') || 'partidos';
+    return savedTab === 'chat' ? 'partidos' : savedTab;
+  });
   const setTab = (nuevaTab) => {
-    setTabState(nuevaTab);
-    localStorage.setItem('cdra_tab_activa', nuevaTab);
+    const segura = nuevaTab === 'chat' ? 'partidos' : nuevaTab;
+    setTabState(segura);
+    localStorage.setItem('cdra_tab_activa', segura);
   };
 
   const [partidosSubtab, setPartidosSubtab] = useState('proximos');
@@ -1362,7 +1353,6 @@ export default function App() {
   const [clasificacion, setClasificacion] = useState(() => leerListaLocal('cdra_clasificacion_local', DEMO_CLASIFICACION));
   const [plantilla, setPlantilla] = useState(() => leerListaLocal('cdra_plantilla_local', DEMO_PLANTILLA));
   const [avisos, setAvisos] = useState(() => leerListaLocal('cdra_avisos_local', DEMO_AVISOS));
-  const [mensajes, setMensajes] = useState(() => leerListaLocal('cdra_mensajes_local', DEMO_CHAT));
 
   const dispararNotificacionMovilAviso = (avisoObj, etiquetaExtra = '') => {
     if (!avisoObj) return;
@@ -1480,11 +1470,6 @@ export default function App() {
   const guardarAvisosLocal = (lista) => {
     setAvisos(lista);
     localStorage.setItem('cdra_avisos_local', JSON.stringify(lista));
-  };
-
-  const guardarMensajesLocal = (lista) => {
-    setMensajes(lista);
-    localStorage.setItem('cdra_mensajes_local', JSON.stringify(lista));
   };
 
   const guardarPerfilesLocal = (lista) => {
@@ -1946,9 +1931,6 @@ export default function App() {
     alert(`PIN de directiva restablecido a ${PIN_DIRECTIVA_INICIAL}`);
   };
 
-  const [canalChat, setCanalChat] = useState('General');
-  const [textoChat, setTextoChat] = useState('');
-
   const [nuevoPartido, setNuevoPartido] = useState({
     categoria: 'Senior ♂',
     local: 'C.D. Rafael Altamira FS',
@@ -2051,17 +2033,6 @@ export default function App() {
         }
       );
 
-      const u5 = onSnapshot(
-        query(collection(db, 'mensajes'), orderBy('createdAt', 'asc')),
-        (snap) => {
-          if (!snap.empty) {
-            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setMensajes(docs);
-            localStorage.setItem('cdra_mensajes_local', JSON.stringify(docs));
-          }
-        }
-      );
-
       const u6 = onSnapshot(
         collection(db, 'perfiles'),
         (snap) => {
@@ -2079,7 +2050,6 @@ export default function App() {
         u2();
         u3();
         u4();
-        u5();
         u6();
       };
     } catch {
@@ -2137,33 +2107,6 @@ export default function App() {
     if (firebaseOk && !jugador.id.startsWith('p')) {
       try {
         await updateDoc(doc(db, 'plantilla', jugador.id), { goles: nuevosGoles });
-      } catch {
-        // Mantiene respaldo local
-      }
-    }
-  };
-
-  const handleSendChat = async (e) => {
-    e.preventDefault();
-    if (!textoChat.trim()) return;
-    const now = new Date();
-    const hora = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const msgObj = {
-      autor: perfil.nombre || 'Usuario',
-      rol: `${perfil.rol} · ${perfil.categoria || perfil.rol}`,
-      canal: canalChat,
-      texto: textoChat.trim(),
-      hora,
-      createdAt: serverTimestamp()
-    };
-    const idTemporal = `msg_${Date.now()}`;
-    const actualizada = [...mensajes, { id: idTemporal, ...msgObj }];
-    guardarMensajesLocal(actualizada);
-    setTextoChat('');
-    if (firebaseOk) {
-      try {
-        const ref = await addDoc(collection(db, 'mensajes'), msgObj);
-        guardarMensajesLocal(actualizada.map((m) => (m.id === idTemporal ? { ...m, id: ref.id } : m)));
       } catch {
         // Mantiene respaldo local
       }
@@ -2697,8 +2640,6 @@ export default function App() {
       guardarPlantillaLocal(plantilla.filter((x) => x.id !== id));
     } else if (col === 'avisos') {
       guardarAvisosLocal(avisos.filter((x) => x.id !== id));
-    } else if (col === 'mensajes') {
-      guardarMensajesLocal(mensajes.filter((x) => x.id !== id));
     } else if (col === 'perfiles') {
       const objetivo = perfilesClub.find((x) => x.id === id);
       const claveObjetivo = objetivo ? obtenerClaveUnicaPerfil(objetivo) : '';
@@ -2720,7 +2661,6 @@ export default function App() {
 
   const { proximos: partidosProximos, jugados: partidosJugados } = separarPartidosProximosYJugados(partidos);
   const goleadoresOrdenados = [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0));
-  const mensajesFiltrados = mensajes.filter((m) => (m.canal || 'General') === canalChat);
 
   const miIdPerfil = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '');
   const miClavePerfil = obtenerClaveUnicaPerfil({ ...perfil, id: miIdPerfil });
@@ -3896,63 +3836,6 @@ export default function App() {
           </div>
         )}
 
-        {tab === 'chat' && (
-          <div>
-            <div className="section-header">
-              <h2 className="section-title"><MessageCircle size={19} /> Chat del Club</h2>
-              <select
-                value={canalChat}
-                onChange={(e) => setCanalChat(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontWeight: 700 }}
-              >
-                <option value="General">Canal: General</option>
-                {CATEGORIAS_CLUB.map((cat) => (
-                  <option key={cat} value={cat}>Canal: {cat}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="chat-box">
-              {mensajesFiltrados.length === 0 && (
-                <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                  No hay mensajes aún en <strong><TextoConSignoGenero texto={canalChat} /></strong>. ¡Escribe el primero!
-                </div>
-              )}
-              {mensajesFiltrados.map((m) => {
-                const esMio = m.autor === perfil.nombre;
-                return (
-                  <div key={m.id} className={`msg ${esMio ? 'mine' : ''}`}>
-                    <div className="msg-head">
-                      <span>{m.autor} (<TextoConSignoGenero texto={m.rol} />)</span>
-                      <span>
-                        {m.hora}
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleDelete('mensajes', m.id)}
-                            style={{ background: 'none', border: 'none', color: 'var(--danger)', marginLeft: 6, cursor: 'pointer' }}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                    <div className="msg-text">{m.texto}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <form className="chat-input-row" onSubmit={handleSendChat}>
-              <input
-                placeholder={`Escribir como ${perfil.nombre}...`}
-                value={textoChat}
-                onChange={(e) => setTextoChat(e.target.value)}
-              />
-              <button type="submit" className="btn-primary"><Send size={16} /></button>
-            </form>
-          </div>
-        )}
-
         {tab === 'avisos' && (
           <div>
             <div className="section-header">
@@ -4228,10 +4111,6 @@ export default function App() {
         <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <Users size={20} />
           <span>Plantilla</span>
-        </button>
-        <button className={`nav-item ${tab === 'chat' ? 'active' : ''}`} onClick={() => { setTab('chat'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
-          <MessageCircle size={20} />
-          <span>Chat</span>
         </button>
         <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <Bell size={20} />
