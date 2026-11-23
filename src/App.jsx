@@ -41,6 +41,7 @@ const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 const MAX_PARTIDOS_POR_IMPORTACION = 80;
+const MAX_EQUIPOS_CLASIFICACION = 60;
 
 const CATEGORIAS_BASE = [
   'Senior',
@@ -82,6 +83,14 @@ C.F.S. L'Olleria La Vall d'Albaida "A" - C.D. Rafael Altamira Picanya "A"
 
 Jornada 14 (10-01-2027)
 C.D. Rafael Altamira Picanya "A" - Santa Ana Algemesí C.D.`;
+
+const TEXTO_MUESTRA_CLASIFICACION = `1 C.D. Rafael Altamira Picanya "A" 10 25 42 18
+2 C.D. Maguen Alfafar F.S. 10 22 38 21
+3 Maristas Cullera 10 19 31 24
+4 C.F.S. Aliança Quart de Poblet "A" 10 16 29 25
+5 C.D. Inter Marjal 10 14 27 28
+6 C.F.S. L'Olleria La Vall d'Albaida "A" 10 11 22 31
+7 Santa Ana Algemesí C.D. 10 8 19 35`;
 
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
@@ -383,7 +392,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
   return resultados;
 }
 
-function normalizarEquipoClave(nombre) {
+function normalizarNombreEquipoClasificacion(nombre) {
   const s = String(nombre || '')
     .toLowerCase()
     .normalize('NFD')
@@ -393,6 +402,98 @@ function normalizarEquipoClave(nombre) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
   if (/rafael altamira|picanya/.test(s)) return 'cd_rafael_altamira';
+  return s;
+}
+
+function parsearClasificacionDesdeTexto(textoCrudo) {
+  const lineas = String(textoCrudo || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const equipos = [];
+
+  for (const linea of lineas) {
+    if (/^(pos|equipo|club|pj|pts|gf|gc|clasificacion|clasificación)\b/i.test(linea)) {
+      continue;
+    }
+
+    // Formato tabular o separado por tabuladores / tuberías / múltiples espacios
+    // Ejemplo: "1  C.D. Rafael Altamira Picanya "A"  10  25  42  18" o "1 | Equipo | 10 | 25 | 42 | 18"
+    const columnas = linea.split(/\s*(?:\t|\|)\s*/).filter(Boolean);
+    if (columnas.length >= 3) {
+      let posNum = null;
+      let idxEquipo = 0;
+      if (/^\d{1,2}\.?$/.test(columnas[0])) {
+        posNum = Number(columnas[0].replace('.', ''));
+        idxEquipo = 1;
+      }
+      const equipoNombre = String(columnas[idxEquipo] || '').trim();
+      const nums = columnas
+        .slice(idxEquipo + 1)
+        .join(' ')
+        .match(/-?\d+/g)
+        ?.map(Number) || [];
+
+      if (equipoNombre.length >= 2 && nums.length >= 2) {
+        const pj = nums[0] ?? 0;
+        const pts = nums[1] ?? 0;
+        const gf = nums[2] ?? 0;
+        const gc = nums[3] ?? 0;
+        equipos.push({
+          pos: posNum || equipos.length + 1,
+          equipo: equipoNombre,
+          pj,
+          pts,
+          gf,
+          gc
+        });
+        continue;
+      }
+    }
+
+    // Formato de línea única con posición inicial y números finales:
+    // "1 C.D. Rafael Altamira Picanya "A" 10 25 42 18" o "C.D. Maguen Alfafar F.S. 10 22"
+    const matchConPos = linea.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+(-?\d+(?:\s+-?\d+){1,6})$/);
+    if (matchConPos) {
+      const posNum = Number(matchConPos[1]);
+      const equipoNombre = matchConPos[2].trim();
+      const nums = matchConPos[3].trim().split(/\s+/).map(Number);
+      if (equipoNombre.length >= 2 && nums.length >= 2) {
+        equipos.push({
+          pos: posNum,
+          equipo: equipoNombre,
+          pj: nums[0] ?? 0,
+          pts: nums[1] ?? 0,
+          gf: nums[2] ?? 0,
+          gc: nums[3] ?? 0
+        });
+        continue;
+      }
+    }
+
+    const matchSinPos = linea.match(/^(.+?)\s+(-?\d+(?:\s+-?\d+){1,6})$/);
+    if (matchSinPos) {
+      const equipoNombre = matchSinPos[1].trim();
+      const nums = matchSinPos[2].trim().split(/\s+/).map(Number);
+      if (equipoNombre.length >= 2 && nums.length >= 2 && !/^\d+$/.test(equipoNombre)) {
+        equipos.push({
+          pos: equipos.length + 1,
+          equipo: equipoNombre,
+          pj: nums[0] ?? 0,
+          pts: nums[1] ?? 0,
+          gf: nums[2] ?? 0,
+          gc: nums[3] ?? 0
+        });
+      }
+    }
+  }
+
+  return equipos;
+}
+
+function normalizarEquipoClave(nombre) {
+  const s = normalizarNombreEquipoClasificacion(nombre);
   return s;
 }
 
@@ -967,7 +1068,9 @@ export default function App() {
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImportBox, setShowImportBox] = useState(false);
+  const [showImportTablaBox, setShowImportTablaBox] = useState(false);
   const [textoImportarPartidos, setTextoImportarPartidos] = useState('');
+  const [textoImportarClasificacion, setTextoImportarClasificacion] = useState('');
   const [urlsSincronizacion, setUrlsSincronizacion] = useState(() =>
     leerListaLocal('cdra_urls_partidos', URLS_POR_DEFECTO)
   );
@@ -1422,6 +1525,7 @@ export default function App() {
     setIsAdmin(false);
     setShowForm(false);
     setShowImportBox(false);
+    setShowImportTablaBox(false);
     setForzarOnboarding(false);
     setModoRegistroJugador(false);
     setIdentificadorLoginInput('');
@@ -1598,6 +1702,7 @@ export default function App() {
       setIsAdmin(false);
       setShowForm(false);
       setShowImportBox(false);
+      setShowImportTablaBox(false);
       return;
     }
     const pin = window.prompt('Introduce el PIN de Directiva:');
@@ -1780,6 +1885,81 @@ export default function App() {
     return unicos.length;
   };
 
+  const registrarClasificacionSinDuplicar = async (candidatos) => {
+    const clavesExistentes = new Set(
+      clasificacion.map((item) => normalizarNombreEquipoClasificacion(item.equipo))
+    );
+    const nuevos = [];
+
+    for (const cand of candidatos) {
+      if (nuevos.length >= MAX_EQUIPOS_CLASIFICACION) break;
+      const nombreEq = String(cand.equipo || '').trim();
+      const claveEq = normalizarNombreEquipoClasificacion(nombreEq);
+      if (!nombreEq || !claveEq || clavesExistentes.has(claveEq)) continue;
+
+      clavesExistentes.add(claveEq);
+      nuevos.push({
+        pos: Number(cand.pos || clasificacion.length + nuevos.length + 1),
+        equipo: nombreEq,
+        pj: Number(cand.pj || 0),
+        pts: Number(cand.pts || 0),
+        gf: Number(cand.gf || 0),
+        gc: Number(cand.gc || 0)
+      });
+    }
+
+    if (nuevos.length === 0) return 0;
+
+    const nuevosConId = nuevos.map((item, idx) => ({
+      id: `eq_sync_${Date.now()}_${idx}`,
+      ...item
+    }));
+
+    const ordenada = [...clasificacion, ...nuevosConId].sort((a, b) => {
+      if (Number(b.pts || 0) !== Number(a.pts || 0)) {
+        return Number(b.pts || 0) - Number(a.pts || 0);
+      }
+      return (Number(b.gf || 0) - Number(b.gc || 0)) - (Number(a.gf || 0) - Number(a.gc || 0));
+    });
+
+    guardarClasificacionLocal(ordenada);
+
+    if (firebaseOk) {
+      for (let i = 0; i < nuevos.length; i++) {
+        try {
+          const ref = await addDoc(collection(db, 'clasificacion'), nuevos[i]);
+          const idTemp = nuevosConId[i].id;
+          guardarClasificacionLocal((prev) =>
+            prev.map((c) => (c.id === idTemp ? { ...c, id: ref.id } : c))
+          );
+        } catch {
+          // Mantiene respaldo local
+        }
+      }
+    }
+
+    return nuevos.length;
+  };
+
+  const handleImportarClasificacionTexto = async (e) => {
+    e.preventDefault();
+    const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion);
+    if (parseados.length === 0) {
+      alert('No se detectaron filas de clasificación válidas en el texto pegado.');
+      return;
+    }
+
+    const añadidos = await registrarClasificacionSinDuplicar(parseados);
+    if (añadidos === 0) {
+      alert('Esos equipos ya estaban en la clasificación (0 duplicados).');
+      return;
+    }
+
+    setTextoImportarClasificacion('');
+    setShowImportTablaBox(false);
+    alert(`¡Se importaron ${añadidos} equipo(s) a la clasificación sin duplicados!`);
+  };
+
   const handleLimpiarDuplicadosPartidos = async () => {
     const vistos = new Set();
     const unicos = [];
@@ -1881,15 +2061,16 @@ export default function App() {
       }
 
       const añadidos = await registrarPartidosSinDuplicar(data.partidos || []);
+      const añadidosTabla = await registrarClasificacionSinDuplicar(data.clasificacion || []);
       const avisoBloqueos =
         data.errores && data.errores.length > 0
           ? `\nNota: algunas webs cargan contenido dinámico o restringen lectura directa (${data.errores.map((e) => e.motivo).join(', ')}). Usa "Pegar texto" para esas.`
           : '';
 
       alert(
-        añadidos > 0
-          ? `¡Listo! Se añadieron ${añadidos} partido(s) nuevo(s) sin duplicados.${avisoBloqueos}`
-          : `Todo al día: no había partidos nuevos que añadir (0 duplicados).${avisoBloqueos}`
+        añadidos > 0 || añadidosTabla > 0
+          ? `¡Listo! Se añadieron ${añadidos} partido(s) y ${añadidosTabla} equipo(s) en clasificación sin duplicados.${avisoBloqueos}`
+          : `Todo al día: no había novedades que añadir (0 duplicados).${avisoBloqueos}`
       );
     } catch {
       alert('No se pudo conectar con /api/sincronizar-partidos. Usa el cuadro de "Pegar texto" si estás probando en local.');
@@ -2575,7 +2756,7 @@ export default function App() {
           </div>
         </div>
         <div className="header-actions">
-          <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); setShowImportBox(false); }}>
+          <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
             <User size={14} /> Perfil
           </button>
           <button className={`admin-btn ${isAdmin ? 'active' : ''}`} onClick={toggleAdmin}>
@@ -2705,7 +2886,7 @@ export default function App() {
 
                 <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
                   <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                    Pega aquí las jornadas o enfrentamientos de Futbuteo, FFCV o del club y se añadirán sin duplicar:
+                    Pega aquí las jornadas o enfrentamientos de El balón de la Comunitat, Futbuteo o FFCV y se añadirán sin duplicar:
                   </p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
@@ -2776,9 +2957,28 @@ export default function App() {
             <div className="section-header">
               <h2 className="section-title"><Trophy size={19} /> Clasificación y Goles</h2>
               {isAdmin && ligaSubtab === 'tabla' && (
-                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-                  <Plus size={15} /> Equipo
-                </button>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => {
+                      setShowImportTablaBox(!showImportTablaBox);
+                      setShowForm(false);
+                    }}
+                  >
+                    <Download size={14} /> Importar tabla
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setShowForm(!showForm);
+                      setShowImportTablaBox(false);
+                    }}
+                  >
+                    <Plus size={15} /> Equipo
+                  </button>
+                </div>
               )}
             </div>
 
@@ -2793,6 +2993,36 @@ export default function App() {
 
             {ligaSubtab === 'tabla' && (
               <>
+                {isAdmin && showImportTablaBox && (
+                  <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                      Importar clasificación completa (sin duplicados)
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                      Pega aquí la clasificación desde El balón de la Comunitat o la federación (posición, equipo, PJ, PTS, GF, GC):
+                    </p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn-rsvp"
+                        onClick={() => setTextoImportarClasificacion(TEXTO_MUESTRA_CLASIFICACION)}
+                      >
+                        Cargar muestra clasificación
+                      </button>
+                    </div>
+                    <textarea
+                      rows="6"
+                      placeholder={`Ejemplo:\n1 C.D. Rafael Altamira Picanya "A" 10 25 42 18\n2 C.D. Maguen Alfafar F.S. 10 22 38 21`}
+                      value={textoImportarClasificacion}
+                      onChange={(e) => setTextoImportarClasificacion(e.target.value)}
+                      required
+                    />
+                    <button type="submit" className="btn-primary">
+                      <Download size={15} /> Añadir clasificación sin duplicados
+                    </button>
+                  </form>
+                )}
+
                 {isAdmin && showForm && (
                   <form className="form-box" onSubmit={handleAddEquipoTabla}>
                     <input placeholder="Nombre del equipo *" required value={nuevoEquipoTabla.equipo} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, equipo: e.target.value })} />
@@ -3273,23 +3503,23 @@ export default function App() {
       </main>
 
       <nav className="bottom-nav">
-        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); }}>
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <Calendar size={20} />
           <span>Partidos</span>
         </button>
-        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); }}>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <Trophy size={20} />
           <span>Liga/Goles</span>
         </button>
-        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); }}>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <Users size={20} />
           <span>Plantilla</span>
         </button>
-        <button className={`nav-item ${tab === 'chat' ? 'active' : ''}`} onClick={() => { setTab('chat'); setShowForm(false); setShowImportBox(false); }}>
+        <button className={`nav-item ${tab === 'chat' ? 'active' : ''}`} onClick={() => { setTab('chat'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <MessageCircle size={20} />
           <span>Chat</span>
         </button>
-        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); }}>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
           <Bell size={20} />
           <span>Avisos</span>
         </button>
