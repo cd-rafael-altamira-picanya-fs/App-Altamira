@@ -181,6 +181,111 @@ function normalizarClavePartido(partido) {
   return `${cat}|${fecha}|${equiposOrdenados}`;
 }
 
+function obtenerMarcaTiempoPartido(partido) {
+  const texto = String(partido?.fecha || '').trim();
+  if (!texto) return Number.MAX_SAFE_INTEGER;
+
+  const meses = {
+    ene: 0, enero: 0,
+    feb: 1, febrero: 1,
+    mar: 2, marzo: 2,
+    abr: 3, abril: 3,
+    may: 4, mayo: 4,
+    jun: 5, junio: 5,
+    jul: 6, julio: 6,
+    ago: 7, agosto: 7,
+    sep: 8, sept: 8, septiembre: 8,
+    oct: 9, octubre: 9,
+    nov: 10, noviembre: 10,
+    dic: 11, diciembre: 11
+  };
+
+  const horaMatch = texto.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  const horas = horaMatch ? Number(horaMatch[1]) : 23;
+  const minutos = horaMatch ? Number(horaMatch[2]) : 59;
+
+  const fechaSlash = texto.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+  if (fechaSlash) {
+    const dia = Number(fechaSlash[1]);
+    const mes = Number(fechaSlash[2]) - 1;
+    let anio = fechaSlash[3] ? Number(fechaSlash[3]) : new Date().getFullYear();
+    if (anio < 100) anio += 2000;
+    const d = new Date(anio, mes, dia, horas, minutos, 0);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+
+  const limpio = texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const partes = limpio.split(/[\s,·]+/);
+  let diaMes = null;
+  let mesIdx = null;
+
+  for (let i = 0; i < partes.length; i++) {
+    const p = partes[i];
+    if (/^\d{1,2}$/.test(p) && Number(p) >= 1 && Number(p) <= 31 && diaMes === null) {
+      diaMes = Number(p);
+    }
+    if (meses[p] !== undefined && mesIdx === null) {
+      mesIdx = meses[p];
+    }
+  }
+
+  if (diaMes !== null && mesIdx !== null) {
+    const ahora = new Date();
+    let anio = ahora.getFullYear();
+    const candidata = new Date(anio, mesIdx, diaMes, horas, minutos, 0);
+    if (candidata.getTime() < ahora.getTime() - 90 * 24 * 60 * 60 * 1000) {
+      anio += 1;
+    }
+    const finalDate = new Date(anio, mesIdx, diaMes, horas, minutos, 0);
+    if (!Number.isNaN(finalDate.getTime())) return finalDate.getTime();
+  }
+
+  const diasSemana = {
+    domingo: 0, dom: 0,
+    lunes: 1, lun: 1,
+    martes: 2, mar: 2,
+    miercoles: 3, mie: 3,
+    jueves: 4, jue: 4,
+    viernes: 5, vie: 5,
+    sabado: 6, sab: 6
+  };
+
+  for (const p of partes) {
+    if (diasSemana[p] !== undefined) {
+      const ahora = new Date();
+      const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
+      const diffDias = (diasSemana[p] - inicioHoy.getDay() + 7) % 7;
+      const candidata = new Date(
+        inicioHoy.getFullYear(),
+        inicioHoy.getMonth(),
+        inicioHoy.getDate() + diffDias,
+        horas,
+        minutos,
+        0
+      );
+      if (candidata.getTime() < ahora.getTime()) {
+        candidata.setDate(candidata.getDate() + 7);
+      }
+      return candidata.getTime();
+    }
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function ordenarPartidosCronologicamente(lista) {
+  return [...(lista || [])].sort((a, b) => {
+    const tA = obtenerMarcaTiempoPartido(a);
+    const tB = obtenerMarcaTiempoPartido(b);
+    if (tA !== tB) return tA - tB;
+    return String(a?.categoria || '').localeCompare(String(b?.categoria || ''), 'es');
+  });
+}
+
 function TextoConSignoGenero({ texto }) {
   if (!texto) return null;
   const partes = String(texto).split(/(♀|♂)/g);
@@ -1547,6 +1652,7 @@ export default function App() {
     }
   };
 
+  const partidosOrdenados = ordenarPartidosCronologicamente(partidos);
   const goleadoresOrdenados = [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0));
   const mensajesFiltrados = mensajes.filter((m) => (m.canal || 'General') === canalChat);
 
@@ -2102,7 +2208,7 @@ export default function App() {
               </form>
             )}
 
-            {partidos.map((p) => {
+            {partidosOrdenados.map((p) => {
               const asistentes = p.asistentes || [];
               const voy = asistentes.includes(perfil.nombre);
               return (
