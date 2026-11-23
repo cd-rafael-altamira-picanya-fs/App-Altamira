@@ -56,6 +56,14 @@ body {
   flex-shrink: 0;
 }
 
+.escudo-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .header h1 {
   font-size: 15px;
   font-weight: 800;
