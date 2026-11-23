@@ -9,6 +9,7 @@
   --danger: #dc2626;
   --success: #16a34a;
   --fucsia: #ec4899;
+  --azul-genero: #2563eb;
 }
 
 * {
@@ -22,6 +23,50 @@ body {
   background-color: var(--bg);
   color: var(--text);
   padding-bottom: 84px;
+}
+
+.signo-mujer {
+  color: #ec4899 !important;
+  font-weight: 900;
+}
+
+.signo-hombre {
+  color: #2563eb !important;
+  font-weight: 900;
+}
+
+.selector-genero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-genero {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.btn-genero.activo-hombre {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e3a8a;
+}
+
+.btn-genero.activo-mujer {
+  background: #fdf2f8;
+  border-color: #ec4899;
+  color: #9d174d;
 }
 
 .header {
