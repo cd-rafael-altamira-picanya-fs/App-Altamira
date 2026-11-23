@@ -138,6 +138,20 @@ const ROLES_ESPECIALES_DIRECTIVA = [
   { value: 'Reserva Directiva 2', label: 'Reserva Directiva 2' }
 ];
 
+function esDirectiva(perfilItem) {
+  const r = String(perfilItem?.rol || perfilItem?.categoria || '').toLowerCase();
+  return r.includes('directiva');
+}
+
+function esEntrenador(perfilItem) {
+  const r = String(perfilItem?.rol || perfilItem?.categoria || '').toLowerCase();
+  return r.includes('entrenador');
+}
+
+function esStaffPrioritario(perfilItem) {
+  return esDirectiva(perfilItem) || esEntrenador(perfilItem) || Boolean(perfilItem?.esReservaDirectiva);
+}
+
 function esRolSinDorsal(rol) {
   const r = String(rol || '').toLowerCase();
   return r.includes('entrenador') || r.includes('directiva') || r.includes('reserva');
@@ -1288,10 +1302,23 @@ export default function App() {
         rol: perfil.rol || 'Jugador',
         categoria: esRolSinDorsal(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
         dorsal: (esRolSinDorsal(perfil.rol) || dorsalPerfil === '0') ? '' : dorsalPerfil,
-        foto: perfil.foto || ''
+        foto: perfil.foto || '',
+        esReservaDirectiva: Boolean(perfil.esReservaDirectiva)
       });
     }
-    return Array.from(mapa.values());
+
+    const todos = Array.from(mapa.values());
+    const directivas = todos.filter((item) => esDirectiva(item));
+    const entrenadores = todos.filter((item) => !esDirectiva(item) && esStaffPrioritario(item));
+    const restoUsuarios = todos
+      .filter((item) => !esDirectiva(item) && !esStaffPrioritario(item))
+      .sort((a, b) =>
+        String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', {
+          sensitivity: 'base'
+        })
+      );
+
+    return [...directivas, ...entrenadores, ...restoUsuarios];
   })();
 
   const perfilesEspecialesCreados = perfilesClub.filter(
