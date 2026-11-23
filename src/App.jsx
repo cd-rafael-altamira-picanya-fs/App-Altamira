@@ -86,11 +86,14 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
   return (
     <div
       style={{
-        width: tamano,
-        height: tamano,
-        minWidth: tamano,
-        minHeight: tamano,
-        borderRadius: '50%',
+        width: `${tamano}px`,
+        height: `${tamano}px`,
+        minWidth: `${tamano}px`,
+        minHeight: `${tamano}px`,
+        maxWidth: `${tamano}px`,
+        maxHeight: `${tamano}px`,
+        flexShrink: 0,
+        borderRadius: '9999px',
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
@@ -98,10 +101,9 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
         backgroundColor: '#1e3a8a',
         color: '#ffffff',
         fontWeight: 800,
-        fontSize: Math.max(13, Math.round(tamano * 0.36)),
+        fontSize: `${Math.max(13, Math.round(tamano * 0.36))}px`,
         border: '2px solid #cbd5e1',
-        position: 'relative',
-        zIndex: 1
+        position: 'relative'
       }}
     >
       {src ? (
@@ -109,9 +111,14 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
           src={src}
           alt={alt || 'Foto de perfil'}
           style={{
-            width: '100%',
-            height: '100%',
+            width: `${tamano}px`,
+            height: `${tamano}px`,
+            minWidth: `${tamano}px`,
+            minHeight: `${tamano}px`,
+            maxWidth: `${tamano}px`,
+            maxHeight: `${tamano}px`,
             objectFit: 'cover',
+            objectPosition: 'center',
             display: 'block'
           }}
         />
@@ -297,9 +304,66 @@ export default function App() {
     rolActual.includes('entrenador') ||
     rolActual.includes('directiva');
 
+  const [partidos, setPartidos] = useState(() => leerListaLocal('cdra_partidos_local', DEMO_PARTIDOS));
+  const [clasificacion, setClasificacion] = useState(() => leerListaLocal('cdra_clasificacion_local', DEMO_CLASIFICACION));
+  const [plantilla, setPlantilla] = useState(() => leerListaLocal('cdra_plantilla_local', DEMO_PLANTILLA));
+  const [avisos, setAvisos] = useState(() => leerListaLocal('cdra_avisos_local', DEMO_AVISOS));
+  const [mensajes, setMensajes] = useState(() => leerListaLocal('cdra_mensajes_local', DEMO_CHAT));
+
+  const guardarPartidosLocal = (lista) => {
+    setPartidos(lista);
+    localStorage.setItem('cdra_partidos_local', JSON.stringify(lista));
+  };
+
+  const guardarClasificacionLocal = (lista) => {
+    setClasificacion(lista);
+    localStorage.setItem('cdra_clasificacion_local', JSON.stringify(lista));
+  };
+
+  const guardarPlantillaLocal = (lista) => {
+    setPlantilla(lista);
+    localStorage.setItem('cdra_plantilla_local', JSON.stringify(lista));
+  };
+
+  const guardarAvisosLocal = (lista) => {
+    setAvisos(lista);
+    localStorage.setItem('cdra_avisos_local', JSON.stringify(lista));
+  };
+
+  const guardarMensajesLocal = (lista) => {
+    setMensajes(lista);
+    localStorage.setItem('cdra_mensajes_local', JSON.stringify(lista));
+  };
+
   const guardarPerfilesLocal = (lista) => {
     setPerfilesClub(lista);
     localStorage.setItem('cdra_perfiles_club', JSON.stringify(lista));
+  };
+
+  const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
+    if ((perfilDatos.rol || 'Jugador') !== 'Jugador') return;
+    const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '')}`;
+    const jugadorDoc = {
+      dorsal: String(perfilDatos.dorsal).trim(),
+      nombre: perfilDatos.nombre.trim(),
+      posicion: 'Sin asignar',
+      categoria: perfilDatos.categoria || '',
+      goles: 0,
+      foto: perfilDatos.foto || '',
+      createdAt: serverTimestamp()
+    };
+
+    const sinDuplicado = plantilla.filter((j) => j.id !== idJugador);
+    const nuevaPlantilla = [...sinDuplicado, { id: idJugador, ...jugadorDoc }];
+    guardarPlantillaLocal(nuevaPlantilla);
+
+    if (firebaseOk) {
+      try {
+        await setDoc(doc(db, 'plantilla', idJugador), jugadorDoc, { merge: true });
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
   };
 
   const sincronizarPerfilEnClub = async (perfilDatos) => {
@@ -329,6 +393,8 @@ export default function App() {
         // Mantiene respaldo local
       }
     }
+
+    await sincronizarJugadorEnPlantilla(perfilDatos);
   };
 
   const handleIniciarSesion = (e) => {
@@ -501,7 +567,7 @@ export default function App() {
     setModoRegistroJugador(false);
     setSesionIniciada(true);
     await sincronizarPerfilEnClub(perfilActualizado);
-    alert('¡Registro completado! Ya puedes entrar con tu nombre o seudónimo y tu contraseña.');
+    alert('¡Registro completado! Tu perfil ya aparece en Perfiles y en Plantilla.');
   };
 
   const handleCrearPerfilEspecialDirectiva = async (e) => {
@@ -619,37 +685,6 @@ export default function App() {
     setPinDirNuevoInput('');
     setPinDirConfirmInput('');
     alert(`PIN de directiva restablecido a ${PIN_DIRECTIVA_INICIAL}`);
-  };
-
-  const [partidos, setPartidos] = useState(() => leerListaLocal('cdra_partidos_local', DEMO_PARTIDOS));
-  const [clasificacion, setClasificacion] = useState(() => leerListaLocal('cdra_clasificacion_local', DEMO_CLASIFICACION));
-  const [plantilla, setPlantilla] = useState(() => leerListaLocal('cdra_plantilla_local', DEMO_PLANTILLA));
-  const [avisos, setAvisos] = useState(() => leerListaLocal('cdra_avisos_local', DEMO_AVISOS));
-  const [mensajes, setMensajes] = useState(() => leerListaLocal('cdra_mensajes_local', DEMO_CHAT));
-
-  const guardarPartidosLocal = (lista) => {
-    setPartidos(lista);
-    localStorage.setItem('cdra_partidos_local', JSON.stringify(lista));
-  };
-
-  const guardarClasificacionLocal = (lista) => {
-    setClasificacion(lista);
-    localStorage.setItem('cdra_clasificacion_local', JSON.stringify(lista));
-  };
-
-  const guardarPlantillaLocal = (lista) => {
-    setPlantilla(lista);
-    localStorage.setItem('cdra_plantilla_local', JSON.stringify(lista));
-  };
-
-  const guardarAvisosLocal = (lista) => {
-    setAvisos(lista);
-    localStorage.setItem('cdra_avisos_local', JSON.stringify(lista));
-  };
-
-  const guardarMensajesLocal = (lista) => {
-    setMensajes(lista);
-    localStorage.setItem('cdra_mensajes_local', JSON.stringify(lista));
   };
 
   const [canalChat, setCanalChat] = useState('General');
