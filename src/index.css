@@ -176,11 +176,19 @@ body {
   z-index: 1;
 }
 
+.avatar-circular-box,
+.mi-perfil-foto-wrap > div,
+.player-info > div > div,
 .mi-perfil-foto-wrap img,
 .card img[alt*="Foto"],
 img[alt*="Foto de perfil"] {
   border: 3px solid var(--fucsia) !important;
   border-radius: 50% !important;
+}
+
+.mi-perfil-foto-wrap img,
+.card img[alt*="Foto"],
+img[alt*="Foto de perfil"] {
   object-fit: cover !important;
   object-position: center !important;
 }
