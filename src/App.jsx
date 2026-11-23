@@ -84,12 +84,9 @@ C.F.S. L'Olleria La Vall d'Albaida "A" - C.D. Rafael Altamira Picanya "A"
 Jornada 14 (10-01-2027)
 C.D. Rafael Altamira Picanya "A" - Santa Ana Algemesí C.D.`;
 
-const TEXTO_MUESTRA_CLASIFICACION = `15 Escudo de C.D. Senabre 'B'
-C.D. Senabre 'B'
-1 9 0 1 8 25 60 -35
-16 Escudo de C.D. Rafael Altamira Picanya 'A'
-C.D. Rafael Altamira Picanya 'A'
-0 9 0 0 9 16 42 -26`;
+const TEXTO_MUESTRA_CLASIFICACION = `#	Equipo	Pts	PJ	PG	PE	PP	GF	GC	Dif
+1	C.D. Corbera	25	9	8	1	0	59	10	+49
+2	F.S. Picassent 'B'	22	9	7	1	1	50	23	+27`;
 
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
@@ -436,7 +433,6 @@ function sanearNombreEquipoTabla(entrada) {
 
   let unido = '';
   for (const parte of filtradas) {
-    // Si la parte empieza por posición + "Escudo de ..."
     const sinPosYEscudo = parte
       .replace(/^\d{1,2}\s+escudo\s+de\s+/i, '')
       .replace(/^escudo\s+de\s+/i, '')
@@ -464,7 +460,6 @@ function sanearNombreEquipoTabla(entrada) {
 
   let limpio = unido.replace(/\s{2,}/g, ' ').trim();
 
-  // Quita repeticiones consecutivas de palabras o frases (ej. "F.S. Picassent 'B' F.S. Picassent 'B'")
   const mitad = Math.floor(limpio.length / 2);
   if (limpio.length >= 10) {
     for (let len = mitad; len >= 6; len--) {
@@ -482,6 +477,19 @@ function sanearNombreEquipoTabla(entrada) {
   return limpio.trim();
 }
 
+function calcularDifClasificacion(gf, gc, difManual) {
+  if (difManual !== undefined && difManual !== null && String(difManual).trim() !== '') {
+    const num = Number(String(difManual).trim());
+    if (!Number.isNaN(num)) return num;
+  }
+  return Number(gf || 0) - Number(gc || 0);
+}
+
+function formatearDif(dif) {
+  const n = Number(dif || 0);
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
 function parsearClasificacionDesdeTexto(textoCrudo) {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
@@ -492,35 +500,54 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
   let posPendiente = null;
   let lineasNombrePendientes = [];
 
-  const finalizarFilaConNumeros = (nums) => {
+  const finalizarFilaConNumeros = (nums, posExplicita = null) => {
     if (!nums || nums.length < 2) return;
     const nombreFinal = sanearNombreEquipoTabla(lineasNombrePendientes);
 
     if (nombreFinal.length >= 2 && !/^\d+$/.test(nombreFinal)) {
       let pts = 0;
       let pj = 0;
+      let pg = 0;
+      let pe = 0;
+      let pp = 0;
       let gf = 0;
       let gc = 0;
+      let dif = null;
 
       if (nums.length >= 7) {
         pts = nums[0];
         pj = nums[1];
+        pg = nums[2];
+        pe = nums[3];
+        pp = nums[4];
         gf = nums[5];
         gc = nums[6];
-      } else {
+        dif = nums[7] !== undefined ? nums[7] : gf - gc;
+      } else if (nums.length >= 4) {
         pj = nums[0] ?? 0;
         pts = nums[1] ?? 0;
         gf = nums[2] ?? 0;
         gc = nums[3] ?? 0;
+        dif = gf - gc;
+      } else {
+        pj = nums[0] ?? 0;
+        pts = nums[1] ?? 0;
+        gf = nums[2] ?? 0;
+        gc = 0;
+        dif = gf - gc;
       }
 
       equipos.push({
-        pos: posPendiente || equipos.length + 1,
+        pos: posExplicita || posPendiente || equipos.length + 1,
         equipo: nombreFinal,
-        pj,
         pts,
+        pj,
+        pg,
+        pe,
+        pp,
         gf,
-        gc
+        gc,
+        dif: calcularDifClasificacion(gf, gc, dif)
       });
     }
 
@@ -531,6 +558,28 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
   for (const linea of lineas) {
     if (esLineaCabeceraOEscudo(linea)) {
       continue;
+    }
+
+    if (linea.includes('\t')) {
+      const celdas = linea.split('\t').map((c) => c.trim()).filter(Boolean);
+      const posCelda = /^\d{1,2}\.?$/.test(celdas[0] || '') ? Number(celdas[0].replace('.', '')) : null;
+      const inicioEq = posCelda !== null ? 1 : 0;
+      const numsCeldas = [];
+      const eqPartes = [];
+
+      for (let i = inicioEq; i < celdas.length; i++) {
+        if (/^[+-]?\d+$/.test(celdas[i])) {
+          numsCeldas.push(Number(celdas[i]));
+        } else {
+          eqPartes.push(celdas[i]);
+        }
+      }
+
+      if (eqPartes.length > 0 && numsCeldas.length >= 2) {
+        lineasNombrePendientes = eqPartes;
+        finalizarFilaConNumeros(numsCeldas, posCelda);
+        continue;
+      }
     }
 
     const limpiaForma = linea.replace(/^forma\s+\d+\s+/i, '').trim();
@@ -552,7 +601,7 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
       continue;
     }
 
-    const matchConPos = limpiaForma.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,7})$/);
+    const matchConPos = limpiaForma.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,8})$/);
     if (matchConPos) {
       const posNum = Number(matchConPos[1]);
       const equipoNombre = sanearNombreEquipoTabla([matchConPos[2]]);
@@ -560,7 +609,7 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
       if (equipoNombre.length >= 2 && nums.length >= 2) {
         posPendiente = posNum;
         lineasNombrePendientes = [equipoNombre];
-        finalizarFilaConNumeros(nums);
+        finalizarFilaConNumeros(nums, posNum);
         continue;
       }
     }
@@ -1054,10 +1103,10 @@ const DEMO_PARTIDOS = [
 ];
 
 const DEMO_CLASIFICACION = [
-  { id: 'c1', pos: 1, equipo: 'C.D. Rafael Altamira FS', pj: 10, pts: 25, gf: 42, gc: 18, escudo: '' },
-  { id: 'c2', pos: 2, equipo: 'Torrent FS', pj: 10, pts: 22, gf: 38, gc: 21, escudo: '' },
-  { id: 'c3', pos: 3, equipo: 'Picanya Futsal B', pj: 10, pts: 19, gf: 31, gc: 24, escudo: '' },
-  { id: 'c4', pos: 4, equipo: 'Paiporta FS', pj: 10, pts: 15, gf: 27, gc: 30, escudo: '' }
+  { id: 'c1', pos: 1, equipo: 'C.D. Rafael Altamira FS', pts: 25, pj: 10, pg: 8, pe: 1, pp: 1, gf: 42, gc: 18, dif: 24, escudo: '' },
+  { id: 'c2', pos: 2, equipo: 'Torrent FS', pts: 22, pj: 10, pg: 7, pe: 1, pp: 2, gf: 38, gc: 21, dif: 17, escudo: '' },
+  { id: 'c3', pos: 3, equipo: 'Picanya Futsal B', pts: 19, pj: 10, pg: 6, pe: 1, pp: 3, gf: 31, gc: 24, dif: 7, escudo: '' },
+  { id: 'c4', pos: 4, equipo: 'Paiporta FS', pts: 15, pj: 10, pg: 5, pe: 0, pp: 5, gf: 27, gc: 30, dif: -3, escudo: '' }
 ];
 
 const DEMO_PLANTILLA = [
@@ -1675,8 +1724,11 @@ export default function App() {
   const [nuevoEquipoTabla, setNuevoEquipoTabla] = useState({
     pos: '',
     equipo: '',
-    pj: '0',
     pts: '0',
+    pj: '0',
+    pg: '0',
+    pe: '0',
+    pp: '0',
     gf: '0',
     gc: '0'
   });
@@ -1981,13 +2033,19 @@ export default function App() {
       if (!nombreEq || !claveEq || clavesExistentes.has(claveEq)) continue;
 
       clavesExistentes.add(claveEq);
+      const gf = Number(cand.gf || 0);
+      const gc = Number(cand.gc || 0);
       nuevos.push({
         pos: Number(cand.pos || clasificacion.length + nuevos.length + 1),
         equipo: nombreEq,
-        pj: Number(cand.pj || 0),
         pts: Number(cand.pts || 0),
-        gf: Number(cand.gf || 0),
-        gc: Number(cand.gc || 0),
+        pj: Number(cand.pj || 0),
+        pg: Number(cand.pg || 0),
+        pe: Number(cand.pe || 0),
+        pp: Number(cand.pp || 0),
+        gf,
+        gc,
+        dif: calcularDifClasificacion(gf, gc, cand.dif),
         escudo: cand.escudo || ''
       });
     }
@@ -2006,7 +2064,7 @@ export default function App() {
       if (Number(b.pts || 0) !== Number(a.pts || 0)) {
         return Number(b.pts || 0) - Number(a.pts || 0);
       }
-      return (Number(b.gf || 0) - Number(b.gc || 0)) - (Number(a.gf || 0) - Number(a.gc || 0));
+      return calcularDifClasificacion(b.gf, b.gc, b.dif) - calcularDifClasificacion(a.gf, a.gc, a.dif);
     });
 
     guardarClasificacionLocal(ordenada);
@@ -2251,20 +2309,26 @@ export default function App() {
   const handleAddEquipoTabla = async (e) => {
     e.preventDefault();
     if (!nuevoEquipoTabla.equipo) return;
+    const gf = Number(nuevoEquipoTabla.gf || 0);
+    const gc = Number(nuevoEquipoTabla.gc || 0);
     const item = {
       pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
       equipo: sanearNombreEquipoTabla([nuevoEquipoTabla.equipo]),
-      pj: Number(nuevoEquipoTabla.pj || 0),
       pts: Number(nuevoEquipoTabla.pts || 0),
-      gf: Number(nuevoEquipoTabla.gf || 0),
-      gc: Number(nuevoEquipoTabla.gc || 0),
+      pj: Number(nuevoEquipoTabla.pj || 0),
+      pg: Number(nuevoEquipoTabla.pg || 0),
+      pe: Number(nuevoEquipoTabla.pe || 0),
+      pp: Number(nuevoEquipoTabla.pp || 0),
+      gf,
+      gc,
+      dif: calcularDifClasificacion(gf, gc),
       escudo: ''
     };
     const idTemporal = `eq_${Date.now()}`;
     const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => Number(a.pos || 999) - Number(b.pos || 999));
     guardarClasificacionLocal(actualizada);
     setShowForm(false);
-    setNuevoEquipoTabla({ pos: '', equipo: '', pj: '0', pts: '0', gf: '0', gc: '0' });
+    setNuevoEquipoTabla({ pos: '', equipo: '', pts: '0', pj: '0', pg: '0', pe: '0', pp: '0', gf: '0', gc: '0' });
     if (firebaseOk) {
       try {
         const ref = await addDoc(collection(db, 'clasificacion'), item);
@@ -3131,7 +3195,7 @@ export default function App() {
                       Importar clasificación completa (sin duplicados)
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                      Pega aquí la clasificación copiada desde El balón de la Comunitat o la federación:
+                      Pega aquí las filas con columnas (# Equipo Pts PJ PG PE PP GF GC Dif) o el texto de clasificación:
                     </p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button
@@ -3144,7 +3208,7 @@ export default function App() {
                     </div>
                     <textarea
                       rows="6"
-                      placeholder={`Ejemplo:\n15 Escudo de C.D. Senabre 'B'\nC.D. Senabre 'B'\n1 9 0 1 8 25 60 -35`}
+                      placeholder={`Ejemplo:\n1\tC.D. Corbera\t25\t9\t8\t1\t0\t59\t10\t+49`}
                       value={textoImportarClasificacion}
                       onChange={(e) => setTextoImportarClasificacion(e.target.value)}
                       required
@@ -3158,29 +3222,40 @@ export default function App() {
                 {isAdmin && showForm && (
                   <form className="form-box" onSubmit={handleAddEquipoTabla}>
                     <input placeholder="Nombre del equipo *" required value={nuevoEquipoTabla.equipo} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, equipo: e.target.value })} />
-                    <input type="number" placeholder="Puntos (PTS)" value={nuevoEquipoTabla.pts} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pts: e.target.value })} />
+                    <input type="number" placeholder="Puntos (Pts)" value={nuevoEquipoTabla.pts} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pts: e.target.value })} />
                     <input type="number" placeholder="Partidos Jugados (PJ)" value={nuevoEquipoTabla.pj} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pj: e.target.value })} />
+                    <input type="number" placeholder="Ganados (PG)" value={nuevoEquipoTabla.pg} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pg: e.target.value })} />
+                    <input type="number" placeholder="Empatados (PE)" value={nuevoEquipoTabla.pe} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pe: e.target.value })} />
+                    <input type="number" placeholder="Perdidos (PP)" value={nuevoEquipoTabla.pp} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pp: e.target.value })} />
                     <input type="number" placeholder="Goles a Favor (GF)" value={nuevoEquipoTabla.gf} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gf: e.target.value })} />
                     <input type="number" placeholder="Goles en Contra (GC)" value={nuevoEquipoTabla.gc} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gc: e.target.value })} />
                     <button type="submit" className="btn-primary">Añadir a la tabla</button>
                   </form>
                 )}
 
-                <div className="card table-wrap">
+                <div className="card table-wrap" style={{ overflowX: 'auto' }}>
                   <table>
                     <thead>
                       <tr>
                         <th>#</th>
                         <th>Equipo</th>
-                        <th>PTS</th>
+                        <th>Pts</th>
                         <th>PJ</th>
-                        <th>GF/GC</th>
+                        <th>PG</th>
+                        <th>PE</th>
+                        <th>PP</th>
+                        <th>GF</th>
+                        <th>GC</th>
+                        <th>Dif</th>
                         {isAdmin && <th></th>}
                       </tr>
                     </thead>
                     <tbody>
                       {clasificacion.map((c, idx) => {
                         const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
+                        const gf = Number(c.gf || 0);
+                        const gc = Number(c.gc || 0);
+                        const dif = calcularDifClasificacion(gf, gc, c.dif);
                         return (
                           <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
                             <td>{c.pos || idx + 1}</td>
@@ -3190,9 +3265,9 @@ export default function App() {
                                   src={c.escudo}
                                   alt={nombreLimpio}
                                   letra={nombreLimpio?.[0] || 'E'}
-                                  tamano={28}
+                                  tamano={26}
                                 />
-                                <span style={{ fontWeight: 600 }}>{nombreLimpio}</span>
+                                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{nombreLimpio}</span>
                                 {isAdmin && (
                                   <label
                                     title="Subir escudo del equipo"
@@ -3217,9 +3292,14 @@ export default function App() {
                                 )}
                               </div>
                             </td>
-                            <td><strong style={{ color: 'var(--primary)' }}>{c.pts}</strong></td>
-                            <td>{c.pj}</td>
-                            <td>{c.gf}:{c.gc}</td>
+                            <td><strong style={{ color: 'var(--primary)' }}>{c.pts ?? 0}</strong></td>
+                            <td>{c.pj ?? 0}</td>
+                            <td>{c.pg ?? 0}</td>
+                            <td>{c.pe ?? 0}</td>
+                            <td>{c.pp ?? 0}</td>
+                            <td>{gf}</td>
+                            <td>{gc}</td>
+                            <td style={{ fontWeight: 700 }}>{formatearDif(dif)}</td>
                             {isAdmin && (
                               <td>
                                 <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
