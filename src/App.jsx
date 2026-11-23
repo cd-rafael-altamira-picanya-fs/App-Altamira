@@ -203,7 +203,7 @@ export default function App() {
           nombre: '',
           correo: '',
           rol: 'Jugador',
-          categoria: 'Senior',
+          categoria: '',
           dorsal: '',
           foto: '',
           pinUsuario: '',
@@ -225,7 +225,7 @@ export default function App() {
   const [formNombre, setFormNombre] = useState(perfil.nombre || '');
   const [formCorreo, setFormCorreo] = useState(perfil.correo || '');
   const [formRol, setFormRol] = useState(perfil.rol || 'Jugador');
-  const [formCategoria, setFormCategoria] = useState(perfil.categoria || 'Senior');
+  const [formCategoria, setFormCategoria] = useState(perfil.categoria || '');
   const [formDorsal, setFormDorsal] = useState(perfil.dorsal || '');
   const [formFoto, setFormFoto] = useState(perfil.foto || '');
   const [formPinNuevo, setFormPinNuevo] = useState(perfil.pinUsuario || '');
@@ -235,7 +235,7 @@ export default function App() {
     tipoSlot: 'Entrenador 1',
     nombre: '',
     dorsal: '0',
-    categoria: 'Senior',
+    categoria: '',
     pinUsuario: '',
     foto: ''
   });
@@ -252,7 +252,7 @@ export default function App() {
       nombre: perfilDatos.nombre.trim(),
       correo: (perfilDatos.correo || '').trim().toLowerCase(),
       rol: perfilDatos.rol || 'Jugador',
-      categoria: perfilDatos.categoria || 'Senior',
+      categoria: perfilDatos.categoria || '',
       dorsal: String(perfilDatos.dorsal).trim(),
       foto: perfilDatos.foto || '',
       pinUsuario: perfilDatos.pinUsuario || '',
@@ -311,7 +311,7 @@ export default function App() {
         nombre: identificadorLoginInput.trim(),
         correo: idIntroducido.includes('@') ? idIntroducido : '',
         rol: 'Jugador',
-        categoria: 'Senior',
+        categoria: '',
         dorsal: '',
         foto: '',
         pinUsuario: '',
@@ -321,6 +321,7 @@ export default function App() {
       setFormNombre(perfilInicial.nombre);
       setFormCorreo(perfilInicial.correo);
       setFormRol('Jugador');
+      setFormCategoria('');
       setFormDorsal('');
       setFormFoto('');
       setFormPinNuevo('');
@@ -353,7 +354,7 @@ export default function App() {
           nombre: coincidenciaIdentidad.nombre || identificadorLoginInput.trim(),
           correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
           rol: coincidenciaIdentidad.rol || 'Jugador',
-          categoria: coincidenciaIdentidad.categoria || 'Senior',
+          categoria: coincidenciaIdentidad.categoria || '',
           dorsal: coincidenciaIdentidad.dorsal || '',
           foto: coincidenciaIdentidad.foto || '',
           pinUsuario: coincidenciaIdentidad.pinUsuario,
@@ -391,6 +392,7 @@ export default function App() {
     const nombreLimpio = formNombre.trim();
     const correoLimpio = formCorreo.trim().toLowerCase();
     const dorsalLimpio = String(formDorsal).trim();
+    const categoriaLimpia = String(formCategoria).trim();
     const pinLimpio = formPinNuevo.trim();
 
     if (nombreLimpio.length < 2) {
@@ -399,6 +401,10 @@ export default function App() {
     }
     if (!dorsalLimpio) {
       alert('El campo Dorsal * es obligatorio.');
+      return;
+    }
+    if (!categoriaLimpia) {
+      alert('El campo Categoría * es obligatorio.');
       return;
     }
     if (!formFoto) {
@@ -418,7 +424,7 @@ export default function App() {
       nombre: nombreLimpio,
       correo: correoLimpio,
       rol: formRol || 'Jugador',
-      categoria: formCategoria || 'Senior',
+      categoria: categoriaLimpia,
       dorsal: dorsalLimpio,
       foto: formFoto,
       pinUsuario: pinLimpio,
@@ -466,7 +472,7 @@ export default function App() {
       nombre: nombreLimpio,
       correo: '',
       rol: rolAsignado,
-      categoria: nuevoPerfilEspecial.categoria,
+      categoria: nuevoPerfilEspecial.categoria || 'Senior',
       dorsal: dorsalLimpio,
       foto: nuevoPerfilEspecial.foto || perfil.foto || '',
       pinUsuario: pinLimpio,
@@ -489,7 +495,7 @@ export default function App() {
       tipoSlot: 'Entrenador 2',
       nombre: '',
       dorsal: '0',
-      categoria: 'Senior',
+      categoria: '',
       pinUsuario: '',
       foto: ''
     });
@@ -512,7 +518,7 @@ export default function App() {
     setFormNombre(perfil.nombre || '');
     setFormCorreo(perfil.correo || '');
     setFormRol(perfil.rol || 'Jugador');
-    setFormCategoria(perfil.categoria || 'Senior');
+    setFormCategoria(perfil.categoria || '');
     setFormDorsal(perfil.dorsal || '');
     setFormFoto(perfil.foto || '');
     setFormPinNuevo(perfil.pinUsuario || '');
@@ -608,7 +614,7 @@ export default function App() {
     dorsal: '',
     nombre: '',
     posicion: 'Ala',
-    categoria: 'Senior',
+    categoria: '',
     goles: '0',
     foto: ''
   });
@@ -762,7 +768,7 @@ export default function App() {
     const hora = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const msgObj = {
       autor: perfil.nombre || 'Usuario',
-      rol: `${perfil.rol} · ${perfil.categoria}`,
+      rol: `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`,
       canal: canalChat,
       texto: textoChat.trim(),
       hora,
@@ -870,7 +876,7 @@ export default function App() {
     const actualizada = [...plantilla, { id: idTemporal, ...item }];
     guardarPlantillaLocal(actualizada);
     setShowForm(false);
-    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: 'Senior', goles: '0', foto: '' });
+    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', goles: '0', foto: '' });
 
     if (firebaseOk) {
       try {
@@ -943,7 +949,7 @@ export default function App() {
         nombre: perfil.nombre || 'Sin nombre',
         correo: perfil.correo || '',
         rol: perfil.rol || 'Jugador',
-        categoria: perfil.categoria || 'Senior',
+        categoria: perfil.categoria || 'Sin categoría',
         dorsal: String(perfil.dorsal || '0'),
         foto: perfil.foto || ''
       });
@@ -1009,6 +1015,7 @@ export default function App() {
                   setModoRegistroJugador(true);
                   setFormNombre('');
                   setFormDorsal('');
+                  setFormCategoria('');
                   setFormFoto('');
                   setFormPinNuevo('');
                   setFormPinConfirm('');
@@ -1067,19 +1074,14 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría</label>
-                <select
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+                <input
                   style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Selecciona o escribe tu categoría (ej. Senior, Juvenil...) *"
                   value={formCategoria}
                   onChange={(e) => setFormCategoria(e.target.value)}
-                >
-                  <option value="Senior">Senior</option>
-                  <option value="Juvenil">Juvenil</option>
-                  <option value="Cadete">Cadete</option>
-                  <option value="Infantil">Infantil</option>
-                  <option value="Alevín">Alevín</option>
-                  <option value="Benjamín">Benjamín</option>
-                </select>
+                  required
+                />
               </div>
 
               <div>
@@ -1153,7 +1155,7 @@ export default function App() {
               <KeyRound size={19} /> Completa tu Perfil de Jugador
             </div>
             <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 700 }}>
-              Campos obligatorios marcados con *: Nombre/Seudónimo *, Dorsal *, Foto * y Contraseña/PIN *.
+              Campos obligatorios marcados con *: Nombre/Seudónimo *, Dorsal *, Categoría *, Foto * y Contraseña/PIN *.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -1197,19 +1199,14 @@ export default function App() {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría</label>
-              <select
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+              <input
                 style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                placeholder="Selecciona o escribe tu categoría (ej. Senior, Juvenil...) *"
                 value={formCategoria}
                 onChange={(e) => setFormCategoria(e.target.value)}
-              >
-                <option value="Senior">Senior</option>
-                <option value="Juvenil">Juvenil</option>
-                <option value="Cadete">Cadete</option>
-                <option value="Infantil">Infantil</option>
-                <option value="Alevín">Alevín</option>
-                <option value="Benjamín">Benjamín</option>
-              </select>
+                required
+              />
             </div>
 
             <div>
