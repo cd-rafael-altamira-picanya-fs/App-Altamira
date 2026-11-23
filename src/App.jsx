@@ -56,7 +56,7 @@ const ROLES_ESPECIALES_DIRECTIVA = [
   { value: 'Reserva Directiva 2', label: 'Reserva Directiva 2' }
 ];
 
-function esRolCuerpoTecnicoODirectiva(rol) {
+function esRolSinDorsal(rol) {
   const r = String(rol || '').toLowerCase();
   return r.includes('entrenador') || r.includes('directiva') || r.includes('reserva');
 }
@@ -84,7 +84,9 @@ function procesarFotoCircular(file, callback) {
 }
 
 function crearIdPerfil(nombre, dorsal, correo = '') {
-  const claveBase = correo.trim() ? `${nombre}_${correo}_${dorsal || 'sin_dorsal'}` : `${nombre}_${dorsal || 'sin_dorsal'}`;
+  const claveBase = correo.trim()
+    ? `${nombre}_${correo}_${dorsal || 'sin_dorsal'}`
+    : `${nombre}_${dorsal || 'sin_dorsal'}`;
   const base = claveBase
     .toLowerCase()
     .normalize('NFD')
@@ -114,6 +116,8 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       boxRef.current.style.setProperty('align-items', 'center', 'important');
       boxRef.current.style.setProperty('justify-content', 'center', 'important');
       boxRef.current.style.setProperty('flex-shrink', '0', 'important');
+      boxRef.current.style.setProperty('z-index', '1', 'important');
+      boxRef.current.style.setProperty('isolation', 'isolate', 'important');
     }
     if (imgRef.current) {
       imgRef.current.style.setProperty('width', px, 'important');
@@ -126,6 +130,7 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       imgRef.current.style.setProperty('object-fit', 'cover', 'important');
       imgRef.current.style.setProperty('object-position', 'center', 'important');
       imgRef.current.style.setProperty('position', 'static', 'important');
+      imgRef.current.style.setProperty('float', 'none', 'important');
       imgRef.current.style.setProperty('margin', '0', 'important');
     }
   }, [tamano, src]);
@@ -234,7 +239,7 @@ const ENTRENOS = [
 
 function perfilJugadorCompleto(p) {
   if (!p) return false;
-  if (esRolCuerpoTecnicoODirectiva(p.rol)) {
+  if (esRolSinDorsal(p.rol)) {
     return Boolean(p.nombre && p.nombre.trim().length >= 2 && p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
   }
   const nombreOk = Boolean(p.nombre && p.nombre.trim().length >= 2);
@@ -325,7 +330,7 @@ export default function App() {
     Boolean(isAdmin) ||
     rolActual.includes('entrenador') ||
     rolActual.includes('directiva');
-  const sinDorsalUsuarioActual = esRolCuerpoTecnicoODirectiva(perfil?.rol);
+  const sinDorsalUsuarioActual = esRolSinDorsal(perfil?.rol);
 
   const [partidos, setPartidos] = useState(() => leerListaLocal('cdra_partidos_local', DEMO_PARTIDOS));
   const [clasificacion, setClasificacion] = useState(() => leerListaLocal('cdra_clasificacion_local', DEMO_CLASIFICACION));
@@ -364,7 +369,7 @@ export default function App() {
   };
 
   const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
-    if (esRolCuerpoTecnicoODirectiva(perfilDatos.rol)) return;
+    if (esRolSinDorsal(perfilDatos.rol)) return;
     const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '')}`;
     const jugadorDoc = {
       dorsal: String(perfilDatos.dorsal).trim(),
@@ -390,7 +395,7 @@ export default function App() {
   };
 
   const sincronizarPerfilEnClub = async (perfilDatos) => {
-    const esEspecial = esRolCuerpoTecnicoODirectiva(perfilDatos.rol);
+    const esEspecial = esRolSinDorsal(perfilDatos.rol);
     const dorsalLimpio = esEspecial ? '' : String(perfilDatos.dorsal || '').trim();
     const categoriaLimpia = esEspecial ? (perfilDatos.rol || 'Entrenador') : (perfilDatos.categoria || '');
     const idDoc = crearIdPerfil(perfilDatos.nombre, dorsalLimpio, perfilDatos.correo || '');
@@ -507,7 +512,7 @@ export default function App() {
     if (coincidenciaIdentidad) {
       if (coincidenciaIdentidad.pinUsuario && coincidenciaIdentidad.pinUsuario.trim() === pinIntroducido) {
         const esDir = coincidenciaIdentidad.rol === 'Directiva';
-        const esEspecial = esRolCuerpoTecnicoODirectiva(coincidenciaIdentidad.rol);
+        const esEspecial = esRolSinDorsal(coincidenciaIdentidad.rol);
         const perfilRecuperado = {
           nombre: coincidenciaIdentidad.nombre || idRaw,
           correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
@@ -549,7 +554,7 @@ export default function App() {
     e.preventDefault();
     const nombreLimpio = formNombre.trim();
     const correoLimpio = formCorreo.trim().toLowerCase();
-    const esEspecial = esRolCuerpoTecnicoODirectiva(formRol);
+    const esEspecial = esRolSinDorsal(formRol);
     const dorsalLimpio = esEspecial ? '' : String(formDorsal).trim();
     const categoriaLimpia = esEspecial ? (formRol || 'Entrenador') : String(formCategoria).trim();
     const pinLimpio = formPinNuevo.trim();
@@ -602,7 +607,7 @@ export default function App() {
 
   const handleCrearPerfilEspecialDirectiva = async (e) => {
     e.preventDefault();
-    const perfilesEspecialesActuales = perfilesClub.filter((p) => p.esReservaDirectiva || esRolCuerpoTecnicoODirectiva(p.rol));
+    const perfilesEspecialesActuales = perfilesClub.filter((p) => p.esReservaDirectiva || esRolSinDorsal(p.rol));
     if (perfilesEspecialesActuales.length >= MAX_PERFILES_ESPECIALES_DIRECTIVA) {
       alert('Ya has creado el máximo de 4 perfiles especiales. Borra uno si quieres crear otro.');
       return;
@@ -1071,8 +1076,8 @@ export default function App() {
         nombre: perfil.nombre || 'Sin nombre',
         correo: perfil.correo || '',
         rol: perfil.rol || 'Jugador',
-        categoria: esRolCuerpoTecnicoODirectiva(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
-        dorsal: esRolCuerpoTecnicoODirectiva(perfil.rol) ? '' : String(perfil.dorsal || ''),
+        categoria: esRolSinDorsal(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
+        dorsal: esRolSinDorsal(perfil.rol) ? '' : String(perfil.dorsal || ''),
         foto: perfil.foto || ''
       });
     }
@@ -1080,7 +1085,7 @@ export default function App() {
   })();
 
   const perfilesEspecialesCreados = perfilesClub.filter(
-    (p) => p.esReservaDirectiva || esRolCuerpoTecnicoODirectiva(p.rol)
+    (p) => p.esReservaDirectiva || esRolSinDorsal(p.rol)
   );
 
   if (!sesionIniciada) {
@@ -1163,10 +1168,10 @@ export default function App() {
                   letra={formNombre?.[0] || 'J'}
                   tamano={76}
                 />
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>
                   Dorsal: #{formDorsal || '-'}
                 </div>
-                <label className="btn-primary" style={{ cursor: 'pointer' }}>
+                <label className="btn-primary" style={{ cursor: 'pointer', position: 'relative', zIndex: 2 }}>
                   <Camera size={15} /> Subir foto *
                   <input
                     type="file"
@@ -1255,7 +1260,7 @@ export default function App() {
   }
 
   if (forzarOnboarding || (!sinDorsalUsuarioActual && !perfilJugadorCompleto(perfil))) {
-    const editandoEspecial = esRolCuerpoTecnicoODirectiva(formRol);
+    const editandoEspecial = esRolSinDorsal(formRol);
     return (
       <div>
         <header className="header">
@@ -1294,11 +1299,11 @@ export default function App() {
                 tamano={76}
               />
               {!editandoEspecial && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>
                   Dorsal: #{formDorsal || '-'}
                 </div>
               )}
-              <label className="btn-primary" style={{ cursor: 'pointer' }}>
+              <label className="btn-primary" style={{ cursor: 'pointer', position: 'relative', zIndex: 2 }}>
                 <Camera size={15} /> {editandoEspecial ? 'Subir foto' : 'Subir foto *'}
                 <input
                   type="file"
@@ -1553,10 +1558,10 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
                         {j.dorsal && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>#{j.dorsal}</span>
                         )}
                       </div>
-                      <div>
+                      <div style={{ position: 'relative', zIndex: 2 }}>
                         <div style={{ fontWeight: 700, fontSize: 15 }}>
                           {idx + 1}º · {j.nombre}
                         </div>
@@ -1650,10 +1655,10 @@ export default function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
                     {j.dorsal && (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>#{j.dorsal}</span>
                     )}
                   </div>
-                  <div>
+                  <div style={{ position: 'relative', zIndex: 2 }}>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                       {j.categoria}
@@ -1848,19 +1853,19 @@ export default function App() {
                     tamano={76}
                   />
                   {!sinDorsalUsuarioActual && perfil.dorsal && (
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2, clear: 'both' }}>
                       #{perfil.dorsal}
                     </div>
                   )}
-                  <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a' }}>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a', position: 'relative', zIndex: 2, clear: 'both' }}>
                     {perfil.nombre}
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, position: 'relative', zIndex: 2, clear: 'both' }}>
                     {sinDorsalUsuarioActual
                       ? (perfil.categoria || perfil.rol)
                       : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
                   </div>
-                  <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
+                  <button type="button" className="btn-primary" style={{ position: 'relative', zIndex: 2, clear: 'both' }} onClick={handleAbrirEditarPerfil}>
                     Editar foto, nombre, dorsal o contraseña
                   </button>
                 </div>
@@ -1868,10 +1873,10 @@ export default function App() {
                 {isAdmin && (
                   <form className="card" onSubmit={handleCrearPerfilEspecialDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div className="section-title" style={{ fontSize: 15 }}>
-                      <UserPlus size={17} /> Entrenador, 2º Entrenador y Reserva ({perfilesEspecialesCreados.length}/{MAX_PERFILES_ESPECIALES_DIRECTIVA})
+                      <UserPlus size={17} /> Entrenador y 2º Entrenador ({perfilesEspecialesCreados.length}/{MAX_PERFILES_ESPECIALES_DIRECTIVA})
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      No llevan dorsal; su categoría/rol es Entrenador o 2º Entrenador.
+                      No llevan dorsal; su rol y categoría es Entrenador o 2º Entrenador.
                     </p>
                     <select
                       style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
@@ -1904,7 +1909,7 @@ export default function App() {
                         letra={nuevoPerfilEspecial.nombre?.[0] || 'E'}
                         tamano={48}
                       />
-                      <label className="btn-rsvp" style={{ cursor: 'pointer' }}>
+                      <label className="btn-rsvp" style={{ cursor: 'pointer', position: 'relative', zIndex: 2 }}>
                         <Camera size={14} /> Foto (opcional)
                         <input
                           type="file"
@@ -1968,17 +1973,17 @@ export default function App() {
                   </div>
                 ) : (
                   listaPerfilesVisibles.map((item) => {
-                    const esEspecialItem = esRolCuerpoTecnicoODirectiva(item.rol);
+                    const esEspecialItem = esRolSinDorsal(item.rol);
                     return (
                       <div key={item.id} className="card player-row">
                         <div className="player-info">
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                             <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
                             {!esEspecialItem && item.dorsal && (
-                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{item.dorsal}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>#{item.dorsal}</span>
                             )}
                           </div>
-                          <div>
+                          <div style={{ position: 'relative', zIndex: 2 }}>
                             <div style={{ fontWeight: 700, fontSize: 15 }}>
                               {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
                             </div>
