@@ -336,7 +336,6 @@ function esPartidoYaJugado(partido, ahoraMs = Date.now()) {
   if (res && res !== 'VS') return true;
   const ts = obtenerMarcaTiempoPartido(partido);
   if (ts === Number.MAX_SAFE_INTEGER) return false;
-  // Consideramos jugado unas 2 horas después del inicio o si su fecha ya pasó
   return ts < ahoraMs - 2 * 60 * 60 * 1000;
 }
 
@@ -754,11 +753,11 @@ export default function App() {
     localStorage.setItem('cdra_tab_activa', nuevaTab);
   };
 
+  const [partidosSubtab, setPartidosSubtab] = useState('proximos');
   const [ligaSubtab, setLigaSubtab] = useState('tabla');
   const [avisosSubtab, setAvisosSubtab] = useState('avisos');
   const [perfilSubtab, setPerfilSubtab] = useState('mi-perfil');
   const [generoPerfilesTab, setGeneroPerfilesTab] = useState('masculina');
-  const [mostrarJugados, setMostrarJugados] = useState(true);
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('cdra_admin_activa') === '1');
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -1831,7 +1830,7 @@ export default function App() {
       <div
         key={p.id}
         className="card"
-        style={yaJugado ? { opacity: 0.85 } : undefined}
+        style={yaJugado ? { opacity: 0.9 } : undefined}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -1840,7 +1839,7 @@ export default function App() {
             </span>
             {yaJugado && (
               <span className="tag" style={{ background: '#e2e8f0', color: '#475569' }}>
-                Finalizado
+                Jugado
               </span>
             )}
           </div>
@@ -2265,6 +2264,23 @@ export default function App() {
               )}
             </div>
 
+            <div className="subtabs">
+              <button
+                type="button"
+                className={`subtab ${partidosSubtab === 'proximos' ? 'active' : ''}`}
+                onClick={() => setPartidosSubtab('proximos')}
+              >
+                Próximos ({partidosProximos.length})
+              </button>
+              <button
+                type="button"
+                className={`subtab ${partidosSubtab === 'jugados' ? 'active' : ''}`}
+                onClick={() => setPartidosSubtab('jugados')}
+              >
+                Jugados ({partidosJugados.length})
+              </button>
+            </div>
+
             {isAdmin && showImportBox && (
               <div className="form-box">
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
@@ -2363,50 +2379,29 @@ export default function App() {
               </form>
             )}
 
-            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--primary)', margin: '8px 0 8px' }}>
-              Próximos partidos ({partidosProximos.length})
-            </div>
-
-            {partidosProximos.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                No hay próximos partidos programados por ahora.
+            {partidosSubtab === 'proximos' && (
+              <div>
+                {partidosProximos.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    No hay próximos partidos programados por ahora.
+                  </div>
+                ) : (
+                  partidosProximos.map((p) => renderTarjetaPartido(p, false))
+                )}
               </div>
-            ) : (
-              partidosProximos.map((p) => renderTarjetaPartido(p, false))
             )}
 
-            <div style={{ marginTop: 18 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 8,
-                  paddingTop: 10,
-                  borderTop: '2px dashed var(--border)'
-                }}
-              >
-                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--muted)' }}>
-                  Partidos ya jugados ({partidosJugados.length})
-                </span>
-                <button
-                  type="button"
-                  className="btn-rsvp"
-                  onClick={() => setMostrarJugados(!mostrarJugados)}
-                >
-                  {mostrarJugados ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </div>
-
-              {mostrarJugados &&
-                (partidosJugados.length === 0 ? (
+            {partidosSubtab === 'jugados' && (
+              <div>
+                {partidosJugados.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                     Aún no hay partidos jugados registrados.
                   </div>
                 ) : (
                   partidosJugados.map((p) => renderTarjetaPartido(p, true))
-                ))}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
