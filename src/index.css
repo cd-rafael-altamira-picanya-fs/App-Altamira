@@ -177,8 +177,7 @@ body {
 }
 
 .avatar-circular-box,
-.mi-perfil-foto-wrap > div,
-.player-info > div > div,
+.avatar-circular-box img,
 .mi-perfil-foto-wrap img,
 .card img[alt*="Foto"],
 img[alt*="Foto de perfil"] {
