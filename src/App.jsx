@@ -967,7 +967,7 @@ function procesarFotoCircular(file, callback) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const size = 200;
+      const size = 160;
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -975,7 +975,7 @@ function procesarFotoCircular(file, callback) {
       const sx = (img.width - minSide) / 2;
       const sy = (img.height - minSide) / 2;
       ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-      callback(canvas.toDataURL('image/jpeg', 0.8));
+      callback(canvas.toDataURL('image/jpeg', 0.72));
     };
     img.src = ev.target.result;
   };
@@ -1194,6 +1194,7 @@ const ENTRENOS = [
   { categoria: 'Escuela / Base ♂ / ♀', dias: 'Martes y Jueves · 17:30 - 18:45' }
 ];
 
+// La foto es opcional en todos los perfiles de jugador
 function perfilJugadorCompleto(p) {
   if (!p) return false;
   if (esRolSinDorsal(p.rol)) {
@@ -1204,9 +1205,8 @@ function perfilJugadorCompleto(p) {
   const categoriaOk = Boolean(p.categoria && String(p.categoria).trim().length > 0);
   const telefonoOk = Boolean(limpiarTelefono(p.telefono).length >= 6);
   const edadOk = Boolean(normalizarEdad(p.edad));
-  const fotoOk = Boolean(p.foto && p.foto.length > 0);
   const pinOk = Boolean(p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
-  return nombreOk && dorsalOk && categoriaOk && telefonoOk && edadOk && fotoOk && pinOk;
+  return nombreOk && dorsalOk && categoriaOk && telefonoOk && edadOk && pinOk;
 }
 
 function leerListaLocal(clave, respaldo) {
@@ -1498,7 +1498,28 @@ export default function App() {
     localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
   };
 
-  const cargarDatosUnaVez = useCallback(async (forzar = false) => {
+  const cargarPerfilesSiToca = useCallback(async (forzar = false) => {
+    const ahora = Date.now();
+    const ultimaSyncPerfiles = Number(localStorage.getItem('cdra_last_sync_perfiles_at') || '0');
+    if (!forzar && ahora - ultimaSyncPerfiles < TTL_SINCRONIZACION_MS) {
+      return;
+    }
+    try {
+      const snapPerfiles = await getDocs(query(collection(db, 'perfiles'), limit(120)));
+      setFirebaseOk(true);
+      localStorage.setItem('cdra_last_sync_perfiles_at', String(Date.now()));
+      if (!snapPerfiles.empty) {
+        const docsPerfiles = snapPerfiles.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const limpia = deduplicarPerfilesLista(docsPerfiles);
+        setPerfilesClub(limpia);
+        localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+      }
+    } catch {
+      // Mantiene datos locales
+    }
+  }, []);
+
+  const cargarDatosUnaVez = useCallback(async (forzar = false, incluirPerfiles = false) => {
     const ahora = Date.now();
     const ultimaSync = Number(localStorage.getItem('cdra_last_sync_at') || '0');
     const tieneDatosLocales =
@@ -1506,20 +1527,29 @@ export default function App() {
 
     if (!forzar && tieneDatosLocales && ahora - ultimaSync < TTL_SINCRONIZACION_MS) {
       setFirebaseOk(true);
+      if (incluirPerfiles) {
+        await cargarPerfilesSiToca(false);
+      }
       return;
     }
 
     setRefrescandoDatos(true);
     try {
-      const [snapPartidos, snapClasif, snapPlantilla, snapPerfiles] = await Promise.all([
-        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(120))),
+      const peticiones = [
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(80))),
         getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
-        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(150))),
-        getDocs(query(collection(db, 'perfiles'), limit(150)))
-      ]);
+        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(120)))
+      ];
+      if (incluirPerfiles || forzar) {
+        peticiones.push(getDocs(query(collection(db, 'perfiles'), limit(120))));
+      }
+
+      const resultados = await Promise.all(peticiones);
+      const [snapPartidos, snapClasif, snapPlantilla, snapPerfiles] = resultados;
 
       setFirebaseOk(true);
-      localStorage.setItem('cdra_last_sync_at', String(Date.now()));
+      const ahoraSync = String(Date.now());
+      localStorage.setItem('cdra_last_sync_at', ahoraSync);
 
       if (!snapPartidos.empty) {
         const docsPartidos = snapPartidos.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1539,18 +1569,27 @@ export default function App() {
         localStorage.setItem('cdra_plantilla_local', JSON.stringify(docsPlantilla));
       }
 
-      if (!snapPerfiles.empty) {
-        const docsPerfiles = snapPerfiles.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const limpia = deduplicarPerfilesLista(docsPerfiles);
-        setPerfilesClub(limpia);
-        localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+      if (snapPerfiles) {
+        localStorage.setItem('cdra_last_sync_perfiles_at', ahoraSync);
+        if (!snapPerfiles.empty) {
+          const docsPerfiles = snapPerfiles.docs.map((d) => ({ id: d.id, ...d.data() }));
+          const limpia = deduplicarPerfilesLista(docsPerfiles);
+          setPerfilesClub(limpia);
+          localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+        }
       }
     } catch {
       setFirebaseOk(false);
     } finally {
       setRefrescandoDatos(false);
     }
-  }, []);
+  }, [cargarPerfilesSiToca]);
+
+  useEffect(() => {
+    if (sesionIniciada && tab === 'perfil') {
+      cargarPerfilesSiToca(false);
+    }
+  }, [sesionIniciada, tab, cargarPerfilesSiToca]);
 
   const existeDorsalEnCategoria = (dorsalCandidato, categoriaCandidata, idAExcluir = '', nombreAExcluir = '') => {
     const dNorm = normalizarDorsal(dorsalCandidato);
@@ -1789,9 +1828,6 @@ export default function App() {
         setSesionIniciada(true);
         const completo = perfilJugadorCompleto(perfilRecuperado);
         setForzarOnboarding(!completo);
-        if (completo) {
-          sincronizarPerfilEnClub(perfilRecuperado);
-        }
         setPinLoginInput('');
         return;
       } else {
@@ -1803,6 +1839,7 @@ export default function App() {
     alert('No se encontró ese usuario. Puedes registrarte como jugador o usar el PIN inicial 1234.');
   };
 
+  // Foto opcional al guardar o editar perfil de jugador
   const handleGuardarConfiguracionObligatoria = async (e) => {
     e.preventDefault();
     const nombreLimpio = formNombre.trim();
@@ -1845,10 +1882,6 @@ export default function App() {
       alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
       return;
     }
-    if (!esEspecial && !formFoto) {
-      alert('El campo Foto * es obligatorio.');
-      return;
-    }
     if (pinLimpio.length < 4 || pinLimpio === PIN_INICIAL_OBLIGATORIO) {
       alert('El campo Contraseña / PIN * es obligatorio (mínimo 4 caracteres y distinto de 1234).');
       return;
@@ -1866,7 +1899,7 @@ export default function App() {
       dorsal: dorsalLimpio,
       telefono: telefonoLimpio,
       edad: edadLimpia,
-      foto: formFoto,
+      foto: formFoto || '',
       pinUsuario: pinLimpio,
       esReservaDirectiva: esEspecial
     };
@@ -2046,12 +2079,12 @@ export default function App() {
   useEffect(() => {
     if (!sesionIniciada) return;
 
-    cargarDatosUnaVez(false);
+    cargarDatosUnaVez(false, false);
 
     let uAvisos = null;
     try {
       uAvisos = onSnapshot(
-        query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(40)),
+        query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(25)),
         (snap) => {
           setFirebaseOk(true);
           if (!snap.empty) {
@@ -2566,6 +2599,7 @@ export default function App() {
     }
   };
 
+  // Foto opcional al añadir jugador desde Directiva
   const handleAddJugador = async (e) => {
     e.preventDefault();
     const dorsalLimpio = String(nuevoJugador.dorsal || '').trim();
@@ -2598,10 +2632,6 @@ export default function App() {
       alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
       return;
     }
-    if (!nuevoJugador.foto) {
-      alert('El campo Subir foto del jugador: * es obligatorio.');
-      return;
-    }
 
     const item = {
       ...nuevoJugador,
@@ -2612,6 +2642,7 @@ export default function App() {
       telefono: telefonoLimpio,
       edad: edadLimpia,
       goles: puedeGestionarAlaYGoles ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
+      foto: nuevoJugador.foto || '',
       createdAt: serverTimestamp()
     };
     const idTemporal = `jug_${Date.now()}`;
@@ -2982,8 +3013,8 @@ export default function App() {
               <div className="section-title">
                 <UserPlus size={19} /> Registro de Jugador
               </div>
-              <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 700 }}>
-                Todos los campos marcados con * son obligatorios. Tu teléfono solo será visible para Directiva y entrenadores.
+              <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                Los campos con * son obligatorios. La foto es <strong>opcional</strong>. Tu teléfono solo será visible para Directiva y entrenadores.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
@@ -2997,7 +3028,7 @@ export default function App() {
                   Dorsal: #{formDorsal || '-'}
                 </div>
                 <label className="btn-primary" style={{ cursor: 'pointer' }}>
-                  <Camera size={15} /> Subir foto *
+                  <Camera size={15} /> Subir foto (opcional)
                   <input
                     type="file"
                     accept="image/*"
@@ -3121,7 +3152,7 @@ export default function App() {
             )}
             <div>
               <h1>C.D. Rafael Altamira</h1>
-              <p>{editandoEspecial ? `Perfil de ${formRol}` : 'Configuración obligatoria del jugador'}</p>
+              <p>{editandoEspecial ? `Perfil de ${formRol}` : 'Configuración del jugador'}</p>
             </div>
           </div>
           <button type="button" className="admin-btn" onClick={handleCerrarSesion}>
@@ -3148,7 +3179,7 @@ export default function App() {
                 </div>
               )}
               <label className="btn-primary" style={{ cursor: 'pointer' }}>
-                <Camera size={15} /> {editandoEspecial ? 'Subir foto' : 'Subir foto *'}
+                <Camera size={15} /> Subir foto (opcional)
                 <input
                   type="file"
                   accept="image/*"
@@ -3279,7 +3310,7 @@ export default function App() {
             type="button"
             className="admin-btn"
             title="Forzar actualización desde Firebase"
-            onClick={() => cargarDatosUnaVez(true)}
+            onClick={() => cargarDatosUnaVez(true, true)}
             disabled={refrescandoDatos}
           >
             <RefreshCw size={14} /> {refrescandoDatos ? '...' : 'Sync'}
@@ -3825,12 +3856,11 @@ export default function App() {
                     onChange={(e) => setNuevoJugador({ ...nuevoJugador, goles: e.target.value })}
                   />
                 )}
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
-                  Subir foto del jugador: *
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Foto del jugador (opcional):
                   <input
                     type="file"
                     accept="image/*"
-                    required
                     onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setNuevoJugador({ ...nuevoJugador, foto: dataUrl }))}
                   />
                 </label>
