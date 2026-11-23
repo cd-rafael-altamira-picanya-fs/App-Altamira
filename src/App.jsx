@@ -980,17 +980,38 @@ function procesarFotoCircular(file, callback) {
   reader.readAsDataURL(file);
 }
 
-function crearIdPerfil(nombre, dorsal, correo = '') {
-  const claveBase = correo.trim()
-    ? `${nombre}_${correo}_${dorsal || 'sin_dorsal'}`
-    : `${nombre}_${dorsal || 'sin_dorsal'}`;
-  const base = claveBase
+function slugBase(texto) {
+  return String(texto || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '');
-  return base || `perfil_${Date.now()}`;
+}
+
+function crearIdPerfil(nombre, dorsal, correo = '', rol = '') {
+  const esEspecial = esRolSinDorsal(rol) || esRolSinDorsal(dorsal);
+  const nombreSlug = slugBase(nombre);
+  if (esEspecial) {
+    const rolSlug = slugBase(esRolSinDorsal(rol) ? rol : dorsal) || 'staff';
+    return `${nombreSlug || 'usuario'}_${rolSlug}`;
+  }
+  const dorsalSlug = normalizarDorsal(dorsal) || 'sin_dorsal';
+  return `${nombreSlug || 'usuario'}_${dorsalSlug}`;
+}
+
+function obtenerClaveUnicaPerfil(item) {
+  const nombreSlug = slugBase(item?.nombre);
+  if (esRolSinDorsal(item?.rol) || item?.esReservaDirectiva) {
+    const rolSlug = slugBase(item?.rol || item?.categoria || 'staff');
+    return `staff:${nombreSlug}:${rolSlug}`;
+  }
+  const dorsalSlug = normalizarDorsal(item?.dorsal) || 'sin_dorsal';
+  const catSlug = slugBase(item?.categoria || '');
+  if (nombreSlug && catSlug) {
+    return `jugador:${nombreSlug}:${catSlug}:${dorsalSlug}`;
+  }
+  return `id:${item?.id || `${nombreSlug}_${dorsalSlug}`}`;
 }
 
 function AvatarCircular({ src, alt, letra, tamano = 48 }) {
@@ -1207,6 +1228,28 @@ function leerListaLocal(clave, respaldo) {
   return respaldo;
 }
 
+function deduplicarPerfilesLista(lista) {
+  const mapa = new Map();
+  for (const item of lista || []) {
+    if (!item || (!item.nombre && !item.dorsal && !item.foto && !item.rol)) continue;
+    const clave = obtenerClaveUnicaPerfil(item);
+    const existente = mapa.get(clave);
+    if (!existente) {
+      mapa.set(clave, item);
+    } else {
+      mapa.set(clave, {
+        ...existente,
+        ...item,
+        foto: item.foto || existente.foto || '',
+        telefono: limpiarTelefono(item.telefono || existente.telefono || ''),
+        edad: normalizarEdad(item.edad || existente.edad || ''),
+        pinUsuario: item.pinUsuario || existente.pinUsuario || ''
+      });
+    }
+  }
+  return Array.from(mapa.values());
+}
+
 export default function App() {
   const [tab, setTabState] = useState(() => localStorage.getItem('cdra_tab_activa') || 'partidos');
   const setTab = (nuevaTab) => {
@@ -1269,7 +1312,9 @@ export default function App() {
         };
   });
 
-  const [perfilesClub, setPerfilesClub] = useState(() => leerListaLocal('cdra_perfiles_club', []));
+  const [perfilesClub, setPerfilesClub] = useState(() =>
+    deduplicarPerfilesLista(leerListaLocal('cdra_perfiles_club', []))
+  );
 
   const [sesionIniciada, setSesionIniciada] = useState(() => {
     return localStorage.getItem('cdra_sesion_activa') === '1';
@@ -1443,8 +1488,9 @@ export default function App() {
   };
 
   const guardarPerfilesLocal = (lista) => {
-    setPerfilesClub(lista);
-    localStorage.setItem('cdra_perfiles_club', JSON.stringify(lista));
+    const limpia = deduplicarPerfilesLista(lista);
+    setPerfilesClub(limpia);
+    localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
   };
 
   const existeDorsalEnCategoria = (dorsalCandidato, categoriaCandidata, idAExcluir = '', nombreAExcluir = '') => {
@@ -1477,7 +1523,7 @@ export default function App() {
     if (chocaEnPlantilla) return true;
 
     if (perfil && !esRolSinDorsal(perfil.rol) && perfil.nombre) {
-      const idPerfilActivo = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '');
+      const idPerfilActivo = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '');
       const mismoUsuario =
         (idAExcluir && idPerfilActivo === idAExcluir) ||
         (nombreExcluido && perfil.nombre.trim().toLowerCase() === nombreExcluido);
@@ -1491,7 +1537,7 @@ export default function App() {
 
   const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
     if (esRolSinDorsal(perfilDatos.rol)) return;
-    const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '')}`;
+    const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '', perfilDatos.rol || '')}`;
     const telefonoLimpio = limpiarTelefono(perfilDatos.telefono);
     const edadLimpia = normalizarEdad(perfilDatos.edad);
     const jugadorDoc = {
@@ -1526,7 +1572,7 @@ export default function App() {
     const categoriaLimpia = esEspecial ? (perfilDatos.rol || 'Entrenador') : (perfilDatos.categoria || '');
     const telefonoLimpio = limpiarTelefono(perfilDatos.telefono);
     const edadLimpia = esEspecial ? '' : normalizarEdad(perfilDatos.edad);
-    const idDoc = crearIdPerfil(perfilDatos.nombre, dorsalLimpio, perfilDatos.correo || '');
+    const idDoc = crearIdPerfil(perfilDatos.nombre, dorsalLimpio, perfilDatos.correo || '', perfilDatos.rol || '');
     const registroPublico = {
       id: idDoc,
       nombre: perfilDatos.nombre.trim(),
@@ -1543,7 +1589,10 @@ export default function App() {
       actualizadoEn: serverTimestamp()
     };
 
-    const sinDuplicado = perfilesClub.filter((item) => item.id !== idDoc);
+    const claveNueva = obtenerClaveUnicaPerfil(registroPublico);
+    const sinDuplicado = perfilesClub.filter(
+      (item) => item.id !== idDoc && obtenerClaveUnicaPerfil(item) !== claveNueva
+    );
     const nuevaLista = [registroPublico, ...sinDuplicado];
     guardarPerfilesLocal(nuevaLista);
 
@@ -1728,7 +1777,7 @@ export default function App() {
       return;
     }
     const idActualPerfil = perfil?.nombre
-      ? crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '')
+      ? crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '')
       : '';
     if (
       !esEspecial &&
@@ -1775,7 +1824,9 @@ export default function App() {
 
   const handleCrearPerfilEspecialDirectiva = async (e) => {
     e.preventDefault();
-    const perfilesEspecialesActuales = perfilesClub.filter((p) => p.esReservaDirectiva || esRolSinDorsal(p.rol));
+    const perfilesEspecialesActuales = deduplicarPerfilesLista(
+      perfilesClub.filter((p) => p.esReservaDirectiva || esRolSinDorsal(p.rol))
+    );
     if (perfilesEspecialesActuales.length >= MAX_PERFILES_ESPECIALES_DIRECTIVA) {
       alert('Ya has creado el máximo de 4 perfiles especiales. Borra uno si quieres crear otro.');
       return;
@@ -1794,7 +1845,7 @@ export default function App() {
       return;
     }
 
-    const idDoc = crearIdPerfil(nombreLimpio, rolElegido, 'especial');
+    const idDoc = crearIdPerfil(nombreLimpio, '', '', rolElegido);
     const registroEspecial = {
       id: idDoc,
       nombre: nombreLimpio,
@@ -1811,7 +1862,11 @@ export default function App() {
       actualizadoEn: serverTimestamp()
     };
 
-    const nuevaLista = [registroEspecial, ...perfilesClub.filter((item) => item.id !== idDoc)];
+    const claveNueva = obtenerClaveUnicaPerfil(registroEspecial);
+    const nuevaLista = [
+      registroEspecial,
+      ...perfilesClub.filter((item) => item.id !== idDoc && obtenerClaveUnicaPerfil(item) !== claveNueva)
+    ];
     guardarPerfilesLocal(nuevaLista);
     if (firebaseOk) {
       try {
@@ -2012,8 +2067,9 @@ export default function App() {
         (snap) => {
           const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           if (lista.length > 0) {
-            setPerfilesClub(lista);
-            localStorage.setItem('cdra_perfiles_club', JSON.stringify(lista));
+            const limpia = deduplicarPerfilesLista(lista);
+            setPerfilesClub(limpia);
+            localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
           }
         }
       );
@@ -2644,7 +2700,13 @@ export default function App() {
     } else if (col === 'mensajes') {
       guardarMensajesLocal(mensajes.filter((x) => x.id !== id));
     } else if (col === 'perfiles') {
-      guardarPerfilesLocal(perfilesClub.filter((x) => x.id !== id));
+      const objetivo = perfilesClub.find((x) => x.id === id);
+      const claveObjetivo = objetivo ? obtenerClaveUnicaPerfil(objetivo) : '';
+      guardarPerfilesLocal(
+        perfilesClub.filter(
+          (x) => x.id !== id && (!claveObjetivo || obtenerClaveUnicaPerfil(x) !== claveObjetivo)
+        )
+      );
     }
 
     if (firebaseOk && !/^(demo|c|p|a|m)\d+$/.test(id)) {
@@ -2660,7 +2722,8 @@ export default function App() {
   const goleadoresOrdenados = [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0));
   const mensajesFiltrados = mensajes.filter((m) => (m.canal || 'General') === canalChat);
 
-  const miIdPerfil = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '');
+  const miIdPerfil = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '');
+  const miClavePerfil = obtenerClaveUnicaPerfil({ ...perfil, id: miIdPerfil });
   const {
     directivasVisibles,
     entrenadoresVisibles,
@@ -2669,14 +2732,14 @@ export default function App() {
     totalPerfilesVisibles
   } = (() => {
     const mapa = new Map();
-    perfilesClub.forEach((p) => {
+    for (const p of deduplicarPerfilesLista(perfilesClub)) {
       if (p.nombre || p.dorsal || p.foto || p.rol) {
-        mapa.set(p.id, p);
+        mapa.set(obtenerClaveUnicaPerfil(p), p);
       }
-    });
+    }
     if (perfil.nombre || perfil.dorsal || perfil.foto || perfil.rol) {
       const dorsalPerfil = String(perfil.dorsal || '').trim();
-      mapa.set(miIdPerfil, {
+      const perfilActualObj = {
         id: miIdPerfil,
         nombre: perfil.nombre || 'Sin nombre',
         correo: perfil.correo || '',
@@ -2687,6 +2750,12 @@ export default function App() {
         edad: esRolSinDorsal(perfil.rol) ? '' : normalizarEdad(perfil.edad || ''),
         foto: perfil.foto || '',
         esReservaDirectiva: Boolean(perfil.esReservaDirectiva)
+      };
+      const prev = mapa.get(miClavePerfil);
+      mapa.set(miClavePerfil, {
+        ...(prev || {}),
+        ...perfilActualObj,
+        foto: perfilActualObj.foto || prev?.foto || ''
       });
     }
 
@@ -2823,8 +2892,9 @@ export default function App() {
     const dorsalItem = String(item.dorsal || '').trim();
     const telefonoItem = limpiarTelefono(item.telefono || '');
     const edadItem = normalizarEdad(item.edad || '');
+    const esUsuarioActual = obtenerClaveUnicaPerfil(item) === miClavePerfil;
     return (
-      <div key={item.id} className="card player-row">
+      <div key={obtenerClaveUnicaPerfil(item)} className="card player-row">
         <div className="player-info">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
@@ -2834,7 +2904,7 @@ export default function App() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>
-              {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
+              {item.nombre} {esUsuarioActual ? '(Tú)' : ''}
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               {esEspecialItem ? (
@@ -2864,8 +2934,8 @@ export default function App() {
     );
   };
 
-  const perfilesEspecialesCreados = perfilesClub.filter(
-    (p) => p.esReservaDirectiva || esRolSinDorsal(p.rol)
+  const perfilesEspecialesCreados = deduplicarPerfilesLista(
+    perfilesClub.filter((p) => p.esReservaDirectiva || esRolSinDorsal(p.rol))
   );
 
   if (!sesionIniciada) {
