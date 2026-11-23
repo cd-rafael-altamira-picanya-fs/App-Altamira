@@ -39,7 +39,7 @@ const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 
-const CATEGORIAS_CLUB = [
+const CATEGORIAS_BASE = [
   'Senior',
   'Juvenil',
   'Cadete',
@@ -48,6 +48,37 @@ const CATEGORIAS_CLUB = [
   'Benjamín',
   'Prebenjamín'
 ];
+
+const CATEGORIAS_CLUB = CATEGORIAS_BASE.flatMap((cat) => [
+  `${cat} ♂`,
+  `${cat} ♀`
+]);
+
+function TextoConSignoGenero({ texto }) {
+  if (!texto) return null;
+  const partes = String(texto).split(/(♀|♂)/g);
+  return (
+    <>
+      {partes.map((parte, idx) => {
+        if (parte === '♀') {
+          return (
+            <span key={idx} className="signo-mujer">
+              ♀
+            </span>
+          );
+        }
+        if (parte === '♂') {
+          return (
+            <span key={idx} className="signo-hombre">
+              ♂
+            </span>
+          );
+        }
+        return <React.Fragment key={idx}>{parte}</React.Fragment>;
+      })}
+    </>
+  );
+}
 
 const ROLES_ESPECIALES_DIRECTIVA = [
   { value: 'Entrenador', label: 'Entrenador' },
@@ -178,9 +209,13 @@ function TarjetaMiPerfil({
         )}
         <div className="mi-perfil-nombre">{perfil.nombre}</div>
         <div className="mi-perfil-rol">
-          {sinDorsalUsuarioActual
-            ? (perfil.categoria || perfil.rol)
-            : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
+          {sinDorsalUsuarioActual ? (
+            <TextoConSignoGenero texto={perfil.categoria || perfil.rol} />
+          ) : (
+            <>
+              {perfil.rol} · <TextoConSignoGenero texto={perfil.categoria || 'Sin categoría'} />
+            </>
+          )}
         </div>
         <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
           Editar foto, nombre, dorsal o contraseña
@@ -193,7 +228,7 @@ function TarjetaMiPerfil({
 const DEMO_PARTIDOS = [
   {
     id: 'demo1',
-    categoria: 'Senior Masculino',
+    categoria: 'Senior ♂',
     local: 'C.D. Rafael Altamira FS',
     visitante: 'Picanya Futsal B',
     fecha: 'Sábado 18:30',
@@ -203,7 +238,7 @@ const DEMO_PARTIDOS = [
   },
   {
     id: 'demo2',
-    categoria: 'Juvenil',
+    categoria: 'Juvenil ♂',
     local: 'Torrent FS',
     visitante: 'C.D. Rafael Altamira FS',
     fecha: 'Domingo 11:00',
@@ -221,10 +256,10 @@ const DEMO_CLASIFICACION = [
 ];
 
 const DEMO_PLANTILLA = [
-  { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Senior', goles: 14, foto: '' },
-  { id: 'p2', dorsal: '7', nombre: 'Alejandro Ruiz', posicion: 'Ala', categoria: 'Senior', goles: 11, foto: '' },
-  { id: 'p3', dorsal: '4', nombre: 'Javier Gómez', posicion: 'Cierre', categoria: 'Senior', goles: 6, foto: '' },
-  { id: 'p4', dorsal: '1', nombre: 'Carlos Martínez', posicion: 'Portero', categoria: 'Senior', goles: 1, foto: '' }
+  { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Senior ♂', goles: 14, foto: '' },
+  { id: 'p2', dorsal: '7', nombre: 'Alejandro Ruiz', posicion: 'Ala', categoria: 'Senior ♂', goles: 11, foto: '' },
+  { id: 'p3', dorsal: '4', nombre: 'Javier Gómez', posicion: 'Cierre', categoria: 'Senior ♂', goles: 6, foto: '' },
+  { id: 'p4', dorsal: '1', nombre: 'Carlos Martínez', posicion: 'Portero', categoria: 'Senior ♂', goles: 1, foto: '' }
 ];
 
 const DEMO_AVISOS = [
@@ -267,9 +302,9 @@ const PABELLONES = [
 ];
 
 const ENTRENOS = [
-  { categoria: 'Senior', dias: 'Martes y Jueves · 20:30 - 22:00' },
-  { categoria: 'Juvenil / Cadete', dias: 'Lunes y Miércoles · 18:30 - 20:00' },
-  { categoria: 'Escuela / Base', dias: 'Martes y Jueves · 17:30 - 18:45' }
+  { categoria: 'Senior ♂ / ♀', dias: 'Martes y Jueves · 20:30 - 22:00' },
+  { categoria: 'Juvenil / Cadete ♂ / ♀', dias: 'Lunes y Miércoles · 18:30 - 20:00' },
+  { categoria: 'Escuela / Base ♂ / ♀', dias: 'Martes y Jueves · 17:30 - 18:45' }
 ];
 
 function perfilJugadorCompleto(p) {
@@ -360,7 +395,6 @@ export default function App() {
     foto: ''
   });
 
-  // Solo entrenadores y directiva pueden asignar demarcación (Ala/Portero/etc.) y goles
   const rolActual = String(perfil?.rol || '').toLowerCase();
   const puedeGestionarAlaYGoles =
     Boolean(isAdmin) ||
@@ -760,7 +794,7 @@ export default function App() {
   const [textoChat, setTextoChat] = useState('');
 
   const [nuevoPartido, setNuevoPartido] = useState({
-    categoria: 'Senior',
+    categoria: 'Senior ♂',
     local: 'C.D. Rafael Altamira FS',
     visitante: '',
     fecha: '',
@@ -965,7 +999,7 @@ export default function App() {
     guardarPartidosLocal(actualizada);
     setShowForm(false);
     setNuevoPartido({
-      categoria: 'Senior',
+      categoria: 'Senior ♂',
       local: 'C.D. Rafael Altamira FS',
       visitante: '',
       fecha: '',
@@ -1478,7 +1512,11 @@ export default function App() {
 
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddPartido}>
-                <input placeholder="Categoría (Senior, Juvenil...)" value={nuevoPartido.categoria} onChange={(e) => setNuevoPartido({ ...nuevoPartido, categoria: e.target.value })} />
+                <select value={nuevoPartido.categoria} onChange={(e) => setNuevoPartido({ ...nuevoPartido, categoria: e.target.value })}>
+                  {CATEGORIAS_CLUB.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
                 <input placeholder="Local" value={nuevoPartido.local} onChange={(e) => setNuevoPartido({ ...nuevoPartido, local: e.target.value })} />
                 <input placeholder="Visitante *" required value={nuevoPartido.visitante} onChange={(e) => setNuevoPartido({ ...nuevoPartido, visitante: e.target.value })} />
                 <input placeholder="Día y Hora (Sábado 18:30)" value={nuevoPartido.fecha} onChange={(e) => setNuevoPartido({ ...nuevoPartido, fecha: e.target.value })} />
@@ -1494,7 +1532,9 @@ export default function App() {
               return (
                 <div key={p.id} className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className={`tag ${p.resultado !== 'VS' ? 'result' : ''}`}>{p.categoria}</span>
+                    <span className={`tag ${p.resultado !== 'VS' ? 'result' : ''}`}>
+                      <TextoConSignoGenero texto={p.categoria} />
+                    </span>
                     {isAdmin && (
                       <button className="btn-danger" onClick={() => handleDelete('partidos', p.id)}>
                         <Trash2 size={14} />
@@ -1611,7 +1651,7 @@ export default function App() {
                           {idx + 1}º · {j.nombre}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                          {j.categoria}
+                          <TextoConSignoGenero texto={j.categoria} />
                           {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
                         </div>
                       </div>
@@ -1709,7 +1749,7 @@ export default function App() {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      {j.categoria}
+                      <TextoConSignoGenero texto={j.categoria} />
                       {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
                       {puedeGestionarAlaYGoles ? ` · ${j.goles || 0} goles` : ''}
                     </div>
@@ -1735,16 +1775,16 @@ export default function App() {
                 style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontWeight: 700 }}
               >
                 <option value="General">Canal: General</option>
-                <option value="Senior">Canal: Senior</option>
-                <option value="Juvenil">Canal: Juvenil</option>
-                <option value="Cadete">Canal: Cadete</option>
+                {CATEGORIAS_CLUB.map((cat) => (
+                  <option key={cat} value={cat}>Canal: {cat}</option>
+                ))}
               </select>
             </div>
 
             <div className="chat-box">
               {mensajesFiltrados.length === 0 && (
                 <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                  No hay mensajes aún en <strong>{canalChat}</strong>. ¡Escribe el primero!
+                  No hay mensajes aún en <strong><TextoConSignoGenero texto={canalChat} /></strong>. ¡Escribe el primero!
                 </div>
               )}
               {mensajesFiltrados.map((m) => {
@@ -1752,7 +1792,7 @@ export default function App() {
                 return (
                   <div key={m.id} className={`msg ${esMio ? 'mine' : ''}`}>
                     <div className="msg-head">
-                      <span>{m.autor} ({m.rol})</span>
+                      <span>{m.autor} (<TextoConSignoGenero texto={m.rol} />)</span>
                       <span>
                         {m.hora}
                         {isAdmin && (
@@ -1855,7 +1895,9 @@ export default function App() {
 
                 {ENTRENOS.map((en) => (
                   <div key={en.categoria} className="card">
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{en.categoria}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>
+                      <TextoConSignoGenero texto={en.categoria} />
+                    </div>
                     <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{en.dias}</div>
                   </div>
                 ))}
@@ -2009,9 +2051,13 @@ export default function App() {
                               {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                              {esEspecialItem
-                                ? (item.categoria || item.rol)
-                                : `${item.rol} · ${item.categoria || 'Sin categoría'}`}
+                              {esEspecialItem ? (
+                                <TextoConSignoGenero texto={item.categoria || item.rol} />
+                              ) : (
+                                <>
+                                  {item.rol} · <TextoConSignoGenero texto={item.categoria || 'Sin categoría'} />
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
