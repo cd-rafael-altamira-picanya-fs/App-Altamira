@@ -82,6 +82,46 @@ function crearIdPerfil(nombre, dorsal, correo = '') {
   return base || `perfil_${Date.now()}`;
 }
 
+function AvatarCircular({ src, alt, letra, tamano = 48 }) {
+  return (
+    <div
+      style={{
+        width: tamano,
+        height: tamano,
+        minWidth: tamano,
+        minHeight: tamano,
+        borderRadius: '50%',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#1e3a8a',
+        color: '#ffffff',
+        fontWeight: 800,
+        fontSize: Math.max(13, Math.round(tamano * 0.36)),
+        border: '2px solid #cbd5e1',
+        position: 'relative',
+        zIndex: 1
+      }}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={alt || 'Foto de perfil'}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block'
+          }}
+        />
+      ) : (
+        <span>{letra || 'U'}</span>
+      )}
+    </div>
+  );
+}
+
 const DEMO_PARTIDOS = [
   {
     id: 'demo1',
@@ -1055,13 +1095,14 @@ export default function App() {
                 Todos los campos marcados con * son obligatorios.
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <div className="avatar-column">
-                  <div className="avatar-circle" style={{ width: 84, height: 84, fontSize: 24 }}>
-                    {formFoto ? <img src={formFoto} alt="Vista previa" /> : (formNombre?.[0] || 'J')}
-                  </div>
-                  <span className="avatar-number-below">#{formDorsal || '0'}</span>
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <AvatarCircular
+                  src={formFoto}
+                  alt="Vista previa"
+                  letra={formNombre?.[0] || 'J'}
+                  tamano={80}
+                />
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>#{formDorsal || '0'}</span>
                 <label className="btn-primary" style={{ cursor: 'pointer' }}>
                   <Camera size={15} /> Subir foto *
                   <input
@@ -1184,13 +1225,14 @@ export default function App() {
               Campos obligatorios marcados con *: Nombre/Seudónimo *, Dorsal *, Categoría *, Foto * y Contraseña/PIN *.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <div className="avatar-column">
-                <div className="avatar-circle" style={{ width: 84, height: 84, fontSize: 24 }}>
-                  {formFoto ? <img src={formFoto} alt="Vista previa" /> : (formNombre?.[0] || 'J')}
-                </div>
-                <span className="avatar-number-below">#{formDorsal || '0'}</span>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <AvatarCircular
+                src={formFoto}
+                alt="Vista previa"
+                letra={formNombre?.[0] || 'J'}
+                tamano={80}
+              />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>#{formDorsal || '0'}</span>
               <label className="btn-primary" style={{ cursor: 'pointer' }}>
                 <Camera size={15} /> Subir foto *
                 <input
@@ -1436,11 +1478,9 @@ export default function App() {
                 {goleadoresOrdenados.map((j, idx) => (
                   <div key={j.id} className="card player-row">
                     <div className="player-info">
-                      <div className="avatar-column">
-                        <div className="avatar-circle">
-                          {j.foto ? <img src={j.foto} alt={j.nombre} /> : (j.nombre?.[0] || 'J')}
-                        </div>
-                        <span className="avatar-number-below">#{j.dorsal || (idx + 1)}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                        <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal || (idx + 1)}</span>
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15 }}>
@@ -1533,11 +1573,9 @@ export default function App() {
             {plantilla.map((j) => (
               <div key={j.id} className="card player-row">
                 <div className="player-info">
-                  <div className="avatar-column">
-                    <div className="avatar-circle">
-                      {j.foto ? <img src={j.foto} alt={j.nombre} /> : (j.nombre?.[0] || 'J')}
-                    </div>
-                    <span className="avatar-number-below">#{j.dorsal || '0'}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal || '0'}</span>
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
@@ -1716,15 +1754,32 @@ export default function App() {
 
             {perfilSubtab === 'mi-perfil' && (
               <>
-                <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                  <div className="avatar-column">
-                    <div className="avatar-circle" style={{ width: 84, height: 84, fontSize: 24 }}>
-                      {perfil.foto ? <img src={perfil.foto} alt={perfil.nombre} /> : (perfil.nombre?.[0] || 'U')}
-                    </div>
-                    <span className="avatar-number-below">#{perfil.dorsal || '0'}</span>
+                <div
+                  className="card"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    gap: 8,
+                    padding: 20
+                  }}
+                >
+                  <AvatarCircular
+                    src={perfil.foto}
+                    alt={perfil.nombre}
+                    letra={perfil.nombre?.[0] || 'U'}
+                    tamano={80}
+                  />
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
+                    #{perfil.dorsal || '0'}
                   </div>
-                  <div style={{ fontWeight: 800, fontSize: 16 }}>{perfil.nombre}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{perfil.rol} · {perfil.categoria}</div>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a' }}>
+                    {perfil.nombre}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
+                    {perfil.rol} · {perfil.categoria || 'Sin categoría'}
+                  </div>
                   <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
                     Editar foto, nombre, dorsal o contraseña
                   </button>
@@ -1821,11 +1876,9 @@ export default function App() {
                   listaPerfilesVisibles.map((item) => (
                     <div key={item.id} className="card player-row">
                       <div className="player-info">
-                        <div className="avatar-column">
-                          <div className="avatar-circle">
-                            {item.foto ? <img src={item.foto} alt={item.nombre} /> : (item.nombre?.[0] || 'U')}
-                          </div>
-                          <span className="avatar-number-below">#{item.dorsal || '0'}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                          <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{item.dorsal || '0'}</span>
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 15 }}>
