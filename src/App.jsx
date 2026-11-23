@@ -159,88 +159,26 @@ function TarjetaMiPerfil({
   sinDorsalUsuarioActual,
   handleAbrirEditarPerfil
 }) {
-  const fotoWrapRef = useRef(null);
-  const fotoImgRef = useRef(null);
-  const textoWrapRef = useRef(null);
-
-  useEffect(() => {
-    if (fotoWrapRef.current) {
-      fotoWrapRef.current.style.setProperty('width', '100%', 'important');
-      fotoWrapRef.current.style.setProperty('display', 'flex', 'important');
-      fotoWrapRef.current.style.setProperty('justify-content', 'center', 'important');
-      fotoWrapRef.current.style.setProperty('align-items', 'center', 'important');
-      fotoWrapRef.current.style.setProperty('margin-bottom', '14px', 'important');
-      fotoWrapRef.current.style.setProperty('position', 'relative', 'important');
-      fotoWrapRef.current.style.setProperty('z-index', '1', 'important');
-    }
-    if (fotoImgRef.current) {
-      fotoImgRef.current.style.setProperty('width', '72px', 'important');
-      fotoImgRef.current.style.setProperty('height', '72px', 'important');
-      fotoImgRef.current.style.setProperty('min-width', '72px', 'important');
-      fotoImgRef.current.style.setProperty('min-height', '72px', 'important');
-      fotoImgRef.current.style.setProperty('max-width', '72px', 'important');
-      fotoImgRef.current.style.setProperty('max-height', '72px', 'important');
-      fotoImgRef.current.style.setProperty('border-radius', '50%', 'important');
-      fotoImgRef.current.style.setProperty('object-fit', 'cover', 'important');
-      fotoImgRef.current.style.setProperty('object-position', 'center', 'important');
-      fotoImgRef.current.style.setProperty('display', 'block', 'important');
-      fotoImgRef.current.style.setProperty('margin', '0 auto', 'important');
-      fotoImgRef.current.style.setProperty('position', 'relative', 'important');
-      fotoImgRef.current.style.setProperty('float', 'none', 'important');
-    }
-    if (textoWrapRef.current) {
-      textoWrapRef.current.style.setProperty('width', '100%', 'important');
-      textoWrapRef.current.style.setProperty('display', 'flex', 'important');
-      textoWrapRef.current.style.setProperty('flex-direction', 'column', 'important');
-      textoWrapRef.current.style.setProperty('align-items', 'center', 'important');
-      textoWrapRef.current.style.setProperty('justify-content', 'center', 'important');
-      textoWrapRef.current.style.setProperty('text-align', 'center', 'important');
-      textoWrapRef.current.style.setProperty('gap', '6px', 'important');
-      textoWrapRef.current.style.setProperty('position', 'relative', 'important');
-      textoWrapRef.current.style.setProperty('z-index', '2', 'important');
-      textoWrapRef.current.style.setProperty('clear', 'both', 'important');
-    }
-  }, [perfil.foto, perfil.nombre, perfil.rol, perfil.categoria, perfil.dorsal]);
+  const dorsalLimpio = String(perfil?.dorsal || '').trim();
+  const mostrarDorsal = !sinDorsalUsuarioActual && dorsalLimpio !== '' && dorsalLimpio !== '0';
 
   return (
-    <div className="card" style={{ padding: 20 }}>
-      <div ref={fotoWrapRef}>
-        {perfil.foto ? (
-          <img
-            ref={fotoImgRef}
-            src={perfil.foto}
-            alt={perfil.nombre || 'Foto de perfil'}
-            style={{ border: '2px solid #cbd5e1' }}
-          />
-        ) : (
-          <div
-            ref={fotoImgRef}
-            style={{
-              backgroundColor: '#1e3a8a',
-              color: '#ffffff',
-              fontWeight: 800,
-              fontSize: 24,
-              border: '2px solid #cbd5e1',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            {perfil.nombre?.[0] || 'U'}
-          </div>
-        )}
+    <div className="card mi-perfil-card">
+      <div className="mi-perfil-foto-wrap">
+        <AvatarCircular
+          src={perfil.foto}
+          alt={perfil.nombre || 'Foto de perfil'}
+          letra={perfil.nombre?.[0] || 'U'}
+          tamano={72}
+        />
       </div>
 
-      <div ref={textoWrapRef}>
-        {!sinDorsalUsuarioActual && perfil.dorsal && (
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
-            #{perfil.dorsal}
-          </div>
+      <div className="mi-perfil-texto-wrap">
+        {mostrarDorsal && (
+          <div className="mi-perfil-dorsal">#{dorsalLimpio}</div>
         )}
-        <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a' }}>
-          {perfil.nombre}
-        </div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>
+        <div className="mi-perfil-nombre">{perfil.nombre}</div>
+        <div className="mi-perfil-rol">
           {sinDorsalUsuarioActual
             ? (perfil.categoria || perfil.rol)
             : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
@@ -341,7 +279,7 @@ function perfilJugadorCompleto(p) {
     return Boolean(p.nombre && p.nombre.trim().length >= 2 && p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
   }
   const nombreOk = Boolean(p.nombre && p.nombre.trim().length >= 2);
-  const dorsalOk = Boolean(p.dorsal && String(p.dorsal).trim().length > 0);
+  const dorsalOk = Boolean(p.dorsal && String(p.dorsal).trim().length > 0 && String(p.dorsal).trim() !== '0');
   const categoriaOk = Boolean(p.categoria && String(p.categoria).trim().length > 0);
   const fotoOk = Boolean(p.foto && p.foto.length > 0);
   const pinOk = Boolean(p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
@@ -411,7 +349,7 @@ export default function App() {
   const [formCorreo, setFormCorreo] = useState(perfil.correo || '');
   const [formRol, setFormRol] = useState(perfil.rol || 'Jugador');
   const [formCategoria, setFormCategoria] = useState(perfil.categoria || '');
-  const [formDorsal, setFormDorsal] = useState(perfil.dorsal || '');
+  const [formDorsal, setFormDorsal] = useState(perfil.dorsal === '0' ? '' : (perfil.dorsal || ''));
   const [formFoto, setFormFoto] = useState(perfil.foto || '');
   const [formPinNuevo, setFormPinNuevo] = useState(perfil.pinUsuario || '');
   const [formPinConfirm, setFormPinConfirm] = useState(perfil.pinUsuario || '');
@@ -494,7 +432,8 @@ export default function App() {
 
   const sincronizarPerfilEnClub = async (perfilDatos) => {
     const esEspecial = esRolSinDorsal(perfilDatos.rol);
-    const dorsalLimpio = esEspecial ? '' : String(perfilDatos.dorsal || '').trim();
+    const dorsalRaw = String(perfilDatos.dorsal || '').trim();
+    const dorsalLimpio = (esEspecial || dorsalRaw === '0') ? '' : dorsalRaw;
     const categoriaLimpia = esEspecial ? (perfilDatos.rol || 'Entrenador') : (perfilDatos.categoria || '');
     const idDoc = crearIdPerfil(perfilDatos.nombre, dorsalLimpio, perfilDatos.correo || '');
     const registroPublico = {
@@ -611,12 +550,13 @@ export default function App() {
       if (coincidenciaIdentidad.pinUsuario && coincidenciaIdentidad.pinUsuario.trim() === pinIntroducido) {
         const esDir = coincidenciaIdentidad.rol === 'Directiva';
         const esEspecial = esRolSinDorsal(coincidenciaIdentidad.rol);
+        const dorsalItem = String(coincidenciaIdentidad.dorsal || '').trim();
         const perfilRecuperado = {
           nombre: coincidenciaIdentidad.nombre || idRaw,
           correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
           rol: coincidenciaIdentidad.rol || 'Jugador',
           categoria: esEspecial ? (coincidenciaIdentidad.rol || 'Entrenador') : (coincidenciaIdentidad.categoria || ''),
-          dorsal: esEspecial ? '' : (coincidenciaIdentidad.dorsal || ''),
+          dorsal: (esEspecial || dorsalItem === '0') ? '' : dorsalItem,
           foto: coincidenciaIdentidad.foto || '',
           pinUsuario: coincidenciaIdentidad.pinUsuario,
           esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva || esEspecial),
@@ -653,7 +593,8 @@ export default function App() {
     const nombreLimpio = formNombre.trim();
     const correoLimpio = formCorreo.trim().toLowerCase();
     const esEspecial = esRolSinDorsal(formRol);
-    const dorsalLimpio = esEspecial ? '' : String(formDorsal).trim();
+    const dorsalRaw = String(formDorsal || '').trim();
+    const dorsalLimpio = (esEspecial || dorsalRaw === '0') ? '' : dorsalRaw;
     const categoriaLimpia = esEspecial ? (formRol || 'Entrenador') : String(formCategoria).trim();
     const pinLimpio = formPinNuevo.trim();
 
@@ -662,7 +603,7 @@ export default function App() {
       return;
     }
     if (!esEspecial && !dorsalLimpio) {
-      alert('El campo Dorsal * es obligatorio.');
+      alert('El campo Dorsal * es obligatorio (y distinto de 0).');
       return;
     }
     if (!esEspecial && !categoriaLimpia) {
@@ -771,11 +712,12 @@ export default function App() {
   };
 
   const handleAbrirEditarPerfil = () => {
+    const dorsalActual = String(perfil.dorsal || '').trim();
     setFormNombre(perfil.nombre || '');
     setFormCorreo(perfil.correo || '');
     setFormRol(perfil.rol || 'Jugador');
     setFormCategoria(perfil.categoria || '');
-    setFormDorsal(perfil.dorsal || '');
+    setFormDorsal(dorsalActual === '0' ? '' : dorsalActual);
     setFormFoto(perfil.foto || '');
     setFormPinNuevo(perfil.pinUsuario || '');
     setFormPinConfirm(perfil.pinUsuario || '');
@@ -1169,13 +1111,14 @@ export default function App() {
       }
     });
     if (perfil.nombre || perfil.dorsal || perfil.foto || perfil.rol) {
+      const dorsalPerfil = String(perfil.dorsal || '').trim();
       mapa.set(miIdPerfil, {
         id: miIdPerfil,
         nombre: perfil.nombre || 'Sin nombre',
         correo: perfil.correo || '',
         rol: perfil.rol || 'Jugador',
         categoria: esRolSinDorsal(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
-        dorsal: esRolSinDorsal(perfil.rol) ? '' : String(perfil.dorsal || ''),
+        dorsal: (esRolSinDorsal(perfil.rol) || dorsalPerfil === '0') ? '' : dorsalPerfil,
         foto: perfil.foto || ''
       });
     }
@@ -1484,6 +1427,9 @@ export default function App() {
     );
   }
 
+  const dorsalCabecera = String(perfil?.dorsal || '').trim();
+  const mostrarDorsalCabecera = !sinDorsalUsuarioActual && dorsalCabecera !== '' && dorsalCabecera !== '0';
+
   return (
     <div>
       <header className="header">
@@ -1502,7 +1448,7 @@ export default function App() {
             <h1>C.D. Rafael Altamira</h1>
             <p>
               {perfil.nombre}
-              {!sinDorsalUsuarioActual && perfil.dorsal ? ` · #${perfil.dorsal}` : ` · ${perfil.rol}`}
+              {mostrarDorsalCabecera ? ` · #${dorsalCabecera}` : ` · ${perfil.rol}`}
             </p>
           </div>
         </div>
@@ -1655,7 +1601,7 @@ export default function App() {
                     <div className="player-info">
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
-                        {j.dorsal && (
+                        {j.dorsal && j.dorsal !== '0' && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
                         )}
                       </div>
@@ -1752,7 +1698,7 @@ export default function App() {
                 <div className="player-info">
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
-                    {j.dorsal && (
+                    {j.dorsal && j.dorsal !== '0' && (
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
                     )}
                   </div>
@@ -2043,13 +1989,14 @@ export default function App() {
                 ) : (
                   listaPerfilesVisibles.map((item) => {
                     const esEspecialItem = esRolSinDorsal(item.rol);
+                    const dorsalItem = String(item.dorsal || '').trim();
                     return (
                       <div key={item.id} className="card player-row">
                         <div className="player-info">
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                             <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
-                            {!esEspecialItem && item.dorsal && (
-                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{item.dorsal}</span>
+                            {!esEspecialItem && dorsalItem && dorsalItem !== '0' && (
+                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{dorsalItem}</span>
                             )}
                           </div>
                           <div>
