@@ -45,6 +45,7 @@ const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 const MAX_PARTIDOS_POR_IMPORTACION = 80;
 const MAX_EQUIPOS_CLASIFICACION = 60;
 const VENTANA_AVISO_URGENTE_PARTIDO_MS = 2 * 60 * 60 * 1000;
+const TTL_SINCRONIZACION_MS = 15 * 60 * 1000;
 
 const CATEGORIAS_BASE = [
   'Senior',
@@ -1363,6 +1364,16 @@ export default function App() {
   const [plantilla, setPlantilla] = useState(() => leerListaLocal('cdra_plantilla_local', DEMO_PLANTILLA));
   const [avisos, setAvisos] = useState(() => leerListaLocal('cdra_avisos_local', DEMO_AVISOS));
 
+  const partidosLenRef = useRef(partidos.length);
+  const clasifLenRef = useRef(clasificacion.length);
+  const plantillaLenRef = useRef(plantilla.length);
+
+  useEffect(() => {
+    partidosLenRef.current = partidos.length;
+    clasifLenRef.current = clasificacion.length;
+    plantillaLenRef.current = plantilla.length;
+  }, [partidos.length, clasificacion.length, plantilla.length]);
+
   const dispararNotificacionMovilAviso = (avisoObj, etiquetaExtra = '') => {
     if (!avisoObj) return;
     setAlertaAvisoEntrante({
@@ -1487,7 +1498,17 @@ export default function App() {
     localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
   };
 
-  const cargarDatosUnaVez = useCallback(async () => {
+  const cargarDatosUnaVez = useCallback(async (forzar = false) => {
+    const ahora = Date.now();
+    const ultimaSync = Number(localStorage.getItem('cdra_last_sync_at') || '0');
+    const tieneDatosLocales =
+      partidosLenRef.current > 0 || clasifLenRef.current > 0 || plantillaLenRef.current > 0;
+
+    if (!forzar && tieneDatosLocales && ahora - ultimaSync < TTL_SINCRONIZACION_MS) {
+      setFirebaseOk(true);
+      return;
+    }
+
     setRefrescandoDatos(true);
     try {
       const [snapPartidos, snapClasif, snapPlantilla, snapPerfiles] = await Promise.all([
@@ -1498,6 +1519,7 @@ export default function App() {
       ]);
 
       setFirebaseOk(true);
+      localStorage.setItem('cdra_last_sync_at', String(Date.now()));
 
       if (!snapPartidos.empty) {
         const docsPartidos = snapPartidos.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -2021,11 +2043,10 @@ export default function App() {
     urgente: false
   });
 
-  // Lectura única de colecciones estables al iniciar sesión + listener único en avisos
   useEffect(() => {
     if (!sesionIniciada) return;
 
-    cargarDatosUnaVez();
+    cargarDatosUnaVez(false);
 
     let uAvisos = null;
     try {
@@ -2204,19 +2225,28 @@ export default function App() {
       createdAt: serverTimestamp()
     }));
 
-    const listaActualizada = [...nuevosConId, ...partidos];
+    let listaActualizada = [...nuevosConId, ...partidos];
     guardarPartidosLocal(listaActualizada);
 
     if (firebaseOk) {
-      for (let i = 0; i < unicos.length; i++) {
-        const payload = { ...unicos[i], asistentes: [], createdAt: serverTimestamp() };
-        try {
-          const ref = await addDoc(collection(db, 'partidos'), payload);
-          const idTemp = nuevosConId[i].id;
-          guardarPartidosLocal((prev) => prev.map((p) => (p.id === idTemp ? { ...p, id: ref.id } : p)));
-        } catch {
-          // Mantiene respaldo local si falla la red
+      const resultadosAltas = await Promise.allSettled(
+        unicos.map((item) =>
+          addDoc(collection(db, 'partidos'), { ...item, asistentes: [], createdAt: serverTimestamp() })
+        )
+      );
+
+      let huboIdReal = false;
+      listaActualizada = listaActualizada.map((p) => {
+        const idx = nuevosConId.findIndex((n) => n.id === p.id);
+        if (idx !== -1 && resultadosAltas[idx]?.status === 'fulfilled') {
+          huboIdReal = true;
+          return { ...p, id: resultadosAltas[idx].value.id };
         }
+        return p;
+      });
+
+      if (huboIdReal) {
+        guardarPartidosLocal(listaActualizada);
       }
     }
 
@@ -2260,7 +2290,7 @@ export default function App() {
       ...item
     }));
 
-    const ordenada = [...clasificacion, ...nuevosConId].sort((a, b) => {
+    let ordenada = [...clasificacion, ...nuevosConId].sort((a, b) => {
       const posA = Number(a.pos || 999);
       const posB = Number(b.pos || 999);
       if (posA !== posB) return posA - posB;
@@ -2273,16 +2303,22 @@ export default function App() {
     guardarClasificacionLocal(ordenada);
 
     if (firebaseOk) {
-      for (let i = 0; i < nuevos.length; i++) {
-        try {
-          const ref = await addDoc(collection(db, 'clasificacion'), nuevos[i]);
-          const idTemp = nuevosConId[i].id;
-          guardarClasificacionLocal((prev) =>
-            prev.map((c) => (c.id === idTemp ? { ...c, id: ref.id } : c))
-          );
-        } catch {
-          // Mantiene respaldo local
+      const resultadosAltas = await Promise.allSettled(
+        nuevos.map((item) => addDoc(collection(db, 'clasificacion'), item))
+      );
+
+      let huboIdReal = false;
+      ordenada = ordenada.map((c) => {
+        const idx = nuevosConId.findIndex((n) => n.id === c.id);
+        if (idx !== -1 && resultadosAltas[idx]?.status === 'fulfilled') {
+          huboIdReal = true;
+          return { ...c, id: resultadosAltas[idx].value.id };
         }
+        return c;
+      });
+
+      if (huboIdReal) {
+        guardarClasificacionLocal(ordenada);
       }
     }
 
@@ -2316,15 +2352,11 @@ export default function App() {
     const anteriores = [...clasificacion];
     guardarClasificacionLocal([]);
     if (firebaseOk) {
-      for (const item of anteriores) {
-        if (!/^c\d+$/.test(item.id)) {
-          try {
-            await deleteDoc(doc(db, 'clasificacion', item.id));
-          } catch {
-            // Ignora si no existía en Firestore
-          }
-        }
-      }
+      await Promise.allSettled(
+        anteriores
+          .filter((item) => !/^c\d+$/.test(item.id))
+          .map((item) => deleteDoc(doc(db, 'clasificacion', item.id)))
+      );
     }
   };
 
@@ -2367,15 +2399,11 @@ export default function App() {
 
     guardarPartidosLocal(unicos);
     if (firebaseOk) {
-      for (const item of eliminados) {
-        if (!/^(demo|c|p|a|m)\d+$/.test(item.id)) {
-          try {
-            await deleteDoc(doc(db, 'partidos', item.id));
-          } catch {
-            // Ignora error si ya no existe
-          }
-        }
-      }
+      await Promise.allSettled(
+        eliminados
+          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
+          .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
+      );
     }
     alert(`Se eliminaron ${eliminados.length} partido(s) duplicado(s).`);
   };
@@ -2396,15 +2424,11 @@ export default function App() {
     }
     guardarPartidosLocal(partidosValidos);
     if (firebaseOk) {
-      for (const item of eliminados) {
-        if (!/^(demo|c|p|a|m)\d+$/.test(item.id)) {
-          try {
-            await deleteDoc(doc(db, 'partidos', item.id));
-          } catch {
-            // Ignora error en documento inexistente
-          }
-        }
-      }
+      await Promise.allSettled(
+        eliminados
+          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
+          .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
+      );
     }
     alert(`Se eliminaron ${eliminados.length} partido(s) con datos incompletos o de fecha/jornada como rival.`);
   };
@@ -3254,8 +3278,8 @@ export default function App() {
           <button
             type="button"
             className="admin-btn"
-            title="Actualizar datos desde Firebase"
-            onClick={cargarDatosUnaVez}
+            title="Forzar actualización desde Firebase"
+            onClick={() => cargarDatosUnaVez(true)}
             disabled={refrescandoDatos}
           >
             <RefreshCw size={14} /> {refrescandoDatos ? '...' : 'Sync'}
