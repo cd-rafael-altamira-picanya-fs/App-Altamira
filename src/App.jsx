@@ -32,7 +32,8 @@ import {
   KeyRound,
   Navigation,
   LogOut,
-  UserPlus
+  UserPlus,
+  Download
 } from 'lucide-react';
 
 const PIN_INICIAL_OBLIGATORIO = '1234';
@@ -53,6 +54,116 @@ const CATEGORIAS_CLUB = CATEGORIAS_BASE.flatMap((cat) => [
   `${cat} ♂`,
   `${cat} ♀`
 ]);
+
+const TEXTO_MUESTRA_FUTBUTEO = `VIERNES 27 NOV
+18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA
+19:15 · ALEVÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA
+20:00 · 2ª REGIONAL JUVENIL FÚTBOL SALA · C.F.S. Aliança Quart de Poblet 'A' · FUERA
+
+SÁBADO 28 NOV
+20:30 · LIGA PROVINCIAL PROMOCIÓN VALENTA FÚTBOL SALA · Maristas Cullera · CASA
+
+DOMINGO 6 DIC
+10:00 · LIGA PROVINCIAL PROMOCIÓN VALENTA FÚTBOL SALA · C.F.S. Aliança Quart de Poblet 'A' · FUERA`;
+
+function detectarCategoriaImportada(texto) {
+  const t = String(texto || '').toLowerCase();
+  const esFemenino = t.includes('valenta') || t.includes('femenin') || t.includes('♀');
+  const signo = esFemenino ? '♀' : '♂';
+
+  const baseEncontrada = CATEGORIAS_BASE.find((cat) => {
+    const limpio = cat
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const tLimpio = t
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    return tLimpio.includes(limpio);
+  });
+
+  if (baseEncontrada) {
+    return `${baseEncontrada} ${signo}`;
+  }
+  return esFemenino ? 'Senior ♀' : 'Senior ♂';
+}
+
+function parsearPartidosDesdeTexto(textoCrudo) {
+  const lineas = String(textoCrudo || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let fechaActual = 'Próximamente';
+  const resultados = [];
+
+  const regexDiaEncabezado = /^(LUNES|MARTES|MIERCOLES|MIÉRCOLES|JUEVES|VIERNES|SABADO|SÁBADO|DOMINGO)\s+\d+\s+[A-ZÁÉÍÓÚ]{3,}/i;
+
+  for (const linea of lineas) {
+    if (regexDiaEncabezado.test(linea)) {
+      fechaActual = linea
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      continue;
+    }
+
+    const horaMatch = linea.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+    const hora = horaMatch ? horaMatch[0] : '';
+
+    const esCasa = /\bCASA\b/i.test(linea);
+    const esFuera = /\bFUERA\b/i.test(linea);
+
+    const segmentos = linea
+      .split(/\s*(?:\||·| - | vs\.? | en )\s*/i)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let rival = '';
+    const candidatoRival = segmentos.find((seg) => {
+      const sLow = seg.toLowerCase();
+      if (/^([01]?\d|2[0-3]):[0-5]\d$/.test(seg)) return false;
+      if (/^(casa|fuera)$/i.test(seg)) return false;
+      if (regexDiaEncabezado.test(seg)) return false;
+      if (sLow.includes('rafael altamira') || sLow.includes('picanya')) return false;
+      if (
+        sLow.includes('fútbol sala') ||
+        sLow.includes('futbol sala') ||
+        sLow.includes('regional') ||
+        sLow.includes('provincial') ||
+        sLow.includes('promoción') ||
+        sLow.includes('promocion') ||
+        sLow.includes('valenta') ||
+        sLow.includes('copa') ||
+        sLow.includes('grup ')
+      ) {
+        return false;
+      }
+      return seg.length >= 2;
+    });
+
+    rival = candidatoRival || 'Rival por confirmar';
+
+    const clubLocal = 'C.D. Rafael Altamira FS';
+    const local = esFuera ? rival : clubLocal;
+    const visitante = esFuera ? clubLocal : rival;
+    const categoria = detectarCategoriaImportada(linea);
+    const fechaCompleta = hora ? `${fechaActual} ${hora}` : fechaActual;
+    const pabellon = esFuera
+      ? `Pabellón visitante (${rival})`
+      : 'Pabellón Municipal Picanya';
+
+    resultados.push({
+      categoria,
+      local,
+      visitante,
+      fecha: fechaCompleta,
+      pabellon,
+      resultado: 'VS'
+    });
+  }
+
+  return resultados;
+}
 
 function TextoConSignoGenero({ texto }) {
   if (!texto) return null;
@@ -445,6 +556,8 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('cdra_admin_activa') === '1');
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showImportBox, setShowImportBox] = useState(false);
+  const [textoImportarPartidos, setTextoImportarPartidos] = useState('');
   const [escudoCargado, setEscudoCargado] = useState(true);
 
   const [pinDirectiva, setPinDirectiva] = useState(() => {
@@ -893,6 +1006,7 @@ export default function App() {
     setSesionIniciada(false);
     setIsAdmin(false);
     setShowForm(false);
+    setShowImportBox(false);
     setForzarOnboarding(false);
     setModoRegistroJugador(false);
     setIdentificadorLoginInput('');
@@ -1068,6 +1182,7 @@ export default function App() {
       localStorage.removeItem('cdra_admin_activa');
       setIsAdmin(false);
       setShowForm(false);
+      setShowImportBox(false);
       return;
     }
     const pin = window.prompt('Introduce el PIN de Directiva:');
@@ -1168,6 +1283,62 @@ export default function App() {
         // Mantiene respaldo local
       }
     }
+  };
+
+  const handleImportarPartidosTexto = async (e) => {
+    e.preventDefault();
+    const parseados = parsearPartidosDesdeTexto(textoImportarPartidos);
+    if (parseados.length === 0) {
+      alert('No se encontraron líneas de partidos para importar.');
+      return;
+    }
+
+    const existentes = new Set(
+      partidos.map((p) =>
+        `${normalizarCategoria(p.categoria)}|${String(p.local || '').toLowerCase()}|${String(p.visitante || '').toLowerCase()}|${String(p.fecha || '').toLowerCase()}`
+      )
+    );
+
+    const nuevosUnicos = parseados.filter((item) => {
+      const clave = `${normalizarCategoria(item.categoria)}|${item.local.toLowerCase()}|${item.visitante.toLowerCase()}|${item.fecha.toLowerCase()}`;
+      if (existentes.has(clave)) return false;
+      existentes.add(clave);
+      return true;
+    });
+
+    if (nuevosUnicos.length === 0) {
+      alert('Esos partidos ya estaban registrados en la app.');
+      return;
+    }
+
+    const creadosConId = nuevosUnicos.map((item, i) => ({
+      id: `imp_${Date.now()}_${i}`,
+      ...item,
+      asistentes: [],
+      createdAt: serverTimestamp()
+    }));
+
+    const actualizada = [...creadosConId, ...partidos];
+    guardarPartidosLocal(actualizada);
+    setTextoImportarPartidos('');
+    setShowImportBox(false);
+
+    if (firebaseOk) {
+      for (let i = 0; i < nuevosUnicos.length; i++) {
+        const docItem = { ...nuevosUnicos[i], asistentes: [], createdAt: serverTimestamp() };
+        try {
+          const ref = await addDoc(collection(db, 'partidos'), docItem);
+          const idTemp = creadosConId[i].id;
+          guardarPartidosLocal((prev) =>
+            prev.map((p) => (p.id === idTemp ? { ...p, id: ref.id } : p))
+          );
+        } catch {
+          // Mantiene respaldo local
+        }
+      }
+    }
+
+    alert(`¡Se importaron ${nuevosUnicos.length} partido(s) correctamente!`);
   };
 
   const handleAddEquipoTabla = async (e) => {
@@ -1708,7 +1879,7 @@ export default function App() {
           </div>
         </div>
         <div className="header-actions">
-          <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); }}>
+          <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); setShowImportBox(false); }}>
             <User size={14} /> Perfil
           </button>
           <button className={`admin-btn ${isAdmin ? 'active' : ''}`} onClick={toggleAdmin}>
@@ -1724,11 +1895,60 @@ export default function App() {
             <div className="section-header">
               <h2 className="section-title"><Calendar size={19} /> Partidos y Asistencia</h2>
               {isAdmin && (
-                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-                  <Plus size={15} /> Partido
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => {
+                      setShowImportBox(!showImportBox);
+                      setShowForm(false);
+                    }}
+                  >
+                    <Download size={14} /> Importar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setShowForm(!showForm);
+                      setShowImportBox(false);
+                    }}
+                  >
+                    <Plus size={15} /> Partido
+                  </button>
+                </div>
               )}
             </div>
+
+            {isAdmin && showImportBox && (
+              <form className="form-box" onSubmit={handleImportarPartidosTexto}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                  Importar partidos desde web (Futbuteo u otra)
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                  Pega aquí el texto o listado de partidos de cualquier web. Se detectará categoría, fecha/hora, rival y CASA/FUERA automáticamente.
+                </p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FUTBUTEO)}
+                  >
+                    Cargar muestra Futbuteo Altamira
+                  </button>
+                </div>
+                <textarea
+                  rows="6"
+                  placeholder={`Ejemplo:\nVIERNES 27 NOV\n18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA`}
+                  value={textoImportarPartidos}
+                  onChange={(e) => setTextoImportarPartidos(e.target.value)}
+                  required
+                />
+                <button type="submit" className="btn-primary">
+                  <Download size={15} /> Añadir partidos importados
+                </button>
+              </form>
+            )}
 
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddPartido}>
@@ -2288,23 +2508,23 @@ export default function App() {
       </main>
 
       <nav className="bottom-nav">
-        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); }}>
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); }}>
           <Calendar size={20} />
           <span>Partidos</span>
         </button>
-        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); }}>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); }}>
           <Trophy size={20} />
           <span>Liga/Goles</span>
         </button>
-        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); }}>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); }}>
           <Users size={20} />
           <span>Plantilla</span>
         </button>
-        <button className={`nav-item ${tab === 'chat' ? 'active' : ''}`} onClick={() => { setTab('chat'); setShowForm(false); }}>
+        <button className={`nav-item ${tab === 'chat' ? 'active' : ''}`} onClick={() => { setTab('chat'); setShowForm(false); setShowImportBox(false); }}>
           <MessageCircle size={20} />
           <span>Chat</span>
         </button>
-        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); }}>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); }}>
           <Bell size={20} />
           <span>Avisos</span>
         </button>
