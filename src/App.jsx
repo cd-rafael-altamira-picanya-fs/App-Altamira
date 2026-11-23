@@ -998,11 +998,11 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       boxRef.current.style.setProperty('border', '3px solid #ec4899', 'important');
       boxRef.current.style.setProperty('overflow', 'hidden', 'important');
       boxRef.current.style.setProperty('position', 'relative', 'important');
-      boxRef.current.style.setProperty('display', 'flex', 'important');
+      boxRef.current.style.setProperty('display', 'inline-flex', 'important');
       boxRef.current.style.setProperty('align-items', 'center', 'important');
       boxRef.current.style.setProperty('justify-content', 'center', 'important');
       boxRef.current.style.setProperty('flex-shrink', '0', 'important');
-      boxRef.current.style.setProperty('margin', '0 auto', 'important');
+      boxRef.current.style.setProperty('margin', '0', 'important');
     }
     if (imgRef.current) {
       imgRef.current.style.setProperty('width', '100%', 'important');
@@ -1025,7 +1025,7 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
         backgroundColor: '#1e3a8a',
         color: '#ffffff',
         fontWeight: 800,
-        fontSize: `${Math.max(13, Math.round(tamano * 0.36))}px`,
+        fontSize: `${Math.max(11, Math.round(tamano * 0.36))}px`,
         border: '3px solid #ec4899'
       }}
     >
@@ -1958,13 +1958,8 @@ export default function App() {
       const clubLocal = 'C.D. Rafael Altamira FS';
       const juegaFuera = Boolean(esVisitanteAltamira && !esLocalAltamira);
 
-      const localFinal = juegaFuera
-        ? rivalLimpio
-        : clubLocal;
-
-      const visitanteFinal = juegaFuera
-        ? clubLocal
-        : rivalLimpio;
+      const localFinal = juegaFuera ? rivalLimpio : clubLocal;
+      const visitanteFinal = juegaFuera ? clubLocal : rivalLimpio;
 
       const pabellonCalculado = juegaFuera
         ? `Pabellón visitante (${rivalLimpio})`
@@ -3233,21 +3228,37 @@ export default function App() {
                   </form>
                 )}
 
-                <div className="card table-wrap" style={{ overflowX: 'auto' }}>
-                  <table>
+                <div
+                  className="card table-wrap"
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    overflowX: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                    padding: '4px 2px'
+                  }}
+                >
+                  <table
+                    style={{
+                      width: '100%',
+                      minWidth: '520px',
+                      borderCollapse: 'collapse',
+                      fontSize: '12px'
+                    }}
+                  >
                     <thead>
                       <tr>
-                        <th>#</th>
-                        <th>Equipo</th>
-                        <th>Pts</th>
-                        <th>PJ</th>
-                        <th>PG</th>
-                        <th>PE</th>
-                        <th>PP</th>
-                        <th>GF</th>
-                        <th>GC</th>
-                        <th>Dif</th>
-                        {isAdmin && <th></th>}
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>#</th>
+                        <th style={{ padding: '8px 6px', whiteSpace: 'nowrap', textAlign: 'left', minWidth: '145px' }}>Equipo</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>Pts</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PJ</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PG</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PE</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PP</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>GF</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>GC</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>Dif</th>
+                        {isAdmin && <th style={{ padding: '8px 4px', whiteSpace: 'nowrap', textAlign: 'center' }}></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -3258,16 +3269,37 @@ export default function App() {
                         const dif = calcularDifClasificacion(gf, gc, c.dif);
                         return (
                           <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
-                            <td>{c.pos || idx + 1}</td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700 }}>
+                              {c.pos || idx + 1}
+                            </td>
+                            <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'left', maxWidth: '185px' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  maxWidth: '100%',
+                                  verticalAlign: 'middle'
+                                }}
+                              >
                                 <AvatarCircular
                                   src={c.escudo}
                                   alt={nombreLimpio}
                                   letra={nombreLimpio?.[0] || 'E'}
-                                  tamano={26}
+                                  tamano={24}
                                 />
-                                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{nombreLimpio}</span>
+                                <span
+                                  title={nombreLimpio}
+                                  style={{
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    display: 'inline-block'
+                                  }}
+                                >
+                                  {nombreLimpio}
+                                </span>
                                 {isAdmin && (
                                   <label
                                     title="Subir escudo del equipo"
@@ -3275,13 +3307,14 @@ export default function App() {
                                       cursor: 'pointer',
                                       display: 'inline-flex',
                                       alignItems: 'center',
-                                      padding: 4,
+                                      padding: 3,
                                       borderRadius: 6,
                                       border: '1px solid var(--border)',
-                                      background: '#fff'
+                                      background: '#fff',
+                                      flexShrink: 0
                                     }}
                                   >
-                                    <Camera size={12} />
+                                    <Camera size={11} />
                                     <input
                                       type="file"
                                       accept="image/*"
@@ -3292,16 +3325,20 @@ export default function App() {
                                 )}
                               </div>
                             </td>
-                            <td><strong style={{ color: 'var(--primary)' }}>{c.pts ?? 0}</strong></td>
-                            <td>{c.pj ?? 0}</td>
-                            <td>{c.pg ?? 0}</td>
-                            <td>{c.pe ?? 0}</td>
-                            <td>{c.pp ?? 0}</td>
-                            <td>{gf}</td>
-                            <td>{gc}</td>
-                            <td style={{ fontWeight: 700 }}>{formatearDif(dif)}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <strong style={{ color: 'var(--primary)' }}>{c.pts ?? 0}</strong>
+                            </td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pj ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pg ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pe ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pp ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{gf}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{gc}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700 }}>
+                              {formatearDif(dif)}
+                            </td>
                             {isAdmin && (
-                              <td>
+                              <td style={{ padding: '8px 4px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
                                 <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
                                   <Trash2 size={12} />
                                 </button>
