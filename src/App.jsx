@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './firebase';
 import {
   collection,
@@ -7,9 +7,11 @@ import {
   doc,
   updateDoc,
   setDoc,
+  getDocs,
   onSnapshot,
   query,
   orderBy,
+  limit,
   serverTimestamp
 } from 'firebase/firestore';
 import {
@@ -33,7 +35,8 @@ import {
   UserPlus,
   Download,
   CopyX,
-  Phone
+  Phone,
+  RefreshCw
 } from 'lucide-react';
 
 const PIN_INICIAL_OBLIGATORIO = '1234';
@@ -1255,6 +1258,7 @@ export default function App() {
   const [generoPerfilesTab, setGeneroPerfilesTab] = useState('masculina');
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('cdra_admin_activa') === '1');
   const [firebaseOk, setFirebaseOk] = useState(false);
+  const [refrescandoDatos, setRefrescandoDatos] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImportBox, setShowImportBox] = useState(false);
   const [showImportTablaBox, setShowImportTablaBox] = useState(false);
@@ -1276,6 +1280,7 @@ export default function App() {
   const [alertaAvisoEntrante, setAlertaAvisoEntrante] = useState(null);
   const avisosVistosRef = useRef(new Set());
   const inicializadoAvisosRef = useRef(false);
+  const nombreUsuarioActualRef = useRef('');
   const recordatoriosPartidoEnviadosRef = useRef(new Set(leerListaLocal('cdra_recordatorios_partido_enviados', [])));
 
   const [pinDirectiva, setPinDirectiva] = useState(() => {
@@ -1302,6 +1307,10 @@ export default function App() {
           esReservaDirectiva: false
         };
   });
+
+  useEffect(() => {
+    nombreUsuarioActualRef.current = (perfil?.nombre || '').trim().toLowerCase();
+  }, [perfil?.nombre]);
 
   const [perfilesClub, setPerfilesClub] = useState(() =>
     deduplicarPerfilesLista(leerListaLocal('cdra_perfiles_club', []))
@@ -1477,6 +1486,49 @@ export default function App() {
     setPerfilesClub(limpia);
     localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
   };
+
+  const cargarDatosUnaVez = useCallback(async () => {
+    setRefrescandoDatos(true);
+    try {
+      const [snapPartidos, snapClasif, snapPlantilla, snapPerfiles] = await Promise.all([
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(120))),
+        getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
+        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(150))),
+        getDocs(query(collection(db, 'perfiles'), limit(150)))
+      ]);
+
+      setFirebaseOk(true);
+
+      if (!snapPartidos.empty) {
+        const docsPartidos = snapPartidos.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setPartidos(docsPartidos);
+        localStorage.setItem('cdra_partidos_local', JSON.stringify(docsPartidos));
+      }
+
+      if (!snapClasif.empty) {
+        const docsClasif = snapClasif.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setClasificacion(docsClasif);
+        localStorage.setItem('cdra_clasificacion_local', JSON.stringify(docsClasif));
+      }
+
+      if (!snapPlantilla.empty) {
+        const docsPlantilla = snapPlantilla.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setPlantilla(docsPlantilla);
+        localStorage.setItem('cdra_plantilla_local', JSON.stringify(docsPlantilla));
+      }
+
+      if (!snapPerfiles.empty) {
+        const docsPerfiles = snapPerfiles.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const limpia = deduplicarPerfilesLista(docsPerfiles);
+        setPerfilesClub(limpia);
+        localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+      }
+    } catch {
+      setFirebaseOk(false);
+    } finally {
+      setRefrescandoDatos(false);
+    }
+  }, []);
 
   const existeDorsalEnCategoria = (dorsalCandidato, categoriaCandidata, idAExcluir = '', nombreAExcluir = '') => {
     const dNorm = normalizarDorsal(dorsalCandidato);
@@ -1969,46 +2021,18 @@ export default function App() {
     urgente: false
   });
 
+  // Lectura única de colecciones estables al iniciar sesión + listener único en avisos
   useEffect(() => {
+    if (!sesionIniciada) return;
+
+    cargarDatosUnaVez();
+
+    let uAvisos = null;
     try {
-      const u1 = onSnapshot(
-        query(collection(db, 'partidos'), orderBy('createdAt', 'desc')),
+      uAvisos = onSnapshot(
+        query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(40)),
         (snap) => {
           setFirebaseOk(true);
-          if (!snap.empty) {
-            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setPartidos(docs);
-            localStorage.setItem('cdra_partidos_local', JSON.stringify(docs));
-          }
-        },
-        () => setFirebaseOk(false)
-      );
-
-      const u2 = onSnapshot(
-        query(collection(db, 'clasificacion'), orderBy('pts', 'desc')),
-        (snap) => {
-          if (!snap.empty) {
-            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setClasificacion(docs);
-            localStorage.setItem('cdra_clasificacion_local', JSON.stringify(docs));
-          }
-        }
-      );
-
-      const u3 = onSnapshot(
-        query(collection(db, 'plantilla'), orderBy('createdAt', 'asc')),
-        (snap) => {
-          if (!snap.empty) {
-            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            setPlantilla(docs);
-            localStorage.setItem('cdra_plantilla_local', JSON.stringify(docs));
-          }
-        }
-      );
-
-      const u4 = onSnapshot(
-        query(collection(db, 'avisos'), orderBy('createdAt', 'desc')),
-        (snap) => {
           if (!snap.empty) {
             const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
             setAvisos(docs);
@@ -2022,7 +2046,7 @@ export default function App() {
               docs.forEach((item) => avisosVistosRef.current.add(item.id));
               if (nuevosAvisos.length > 0) {
                 const ultimo = nuevosAvisos[0];
-                const autorActual = (perfil?.nombre || '').trim().toLowerCase();
+                const autorActual = nombreUsuarioActualRef.current;
                 const autorAviso = (ultimo.autor || '').trim().toLowerCase();
                 if (!autorActual || !autorAviso || autorActual !== autorAviso) {
                   dispararNotificacionMovilAviso(ultimo);
@@ -2030,32 +2054,17 @@ export default function App() {
               }
             }
           }
-        }
+        },
+        () => {}
       );
-
-      const u6 = onSnapshot(
-        collection(db, 'perfiles'),
-        (snap) => {
-          const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          if (lista.length > 0) {
-            const limpia = deduplicarPerfilesLista(lista);
-            setPerfilesClub(limpia);
-            localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
-          }
-        }
-      );
-
-      return () => {
-        u1();
-        u2();
-        u3();
-        u4();
-        u6();
-      };
     } catch {
-      setFirebaseOk(false);
+      // Mantiene datos locales
     }
-  }, [perfil?.nombre]);
+
+    return () => {
+      if (uAvisos) uAvisos();
+    };
+  }, [sesionIniciada, cargarDatosUnaVez]);
 
   const toggleAdmin = () => {
     if (isAdmin) {
@@ -3242,6 +3251,15 @@ export default function App() {
           </div>
         </div>
         <div className="header-actions">
+          <button
+            type="button"
+            className="admin-btn"
+            title="Actualizar datos desde Firebase"
+            onClick={cargarDatosUnaVez}
+            disabled={refrescandoDatos}
+          >
+            <RefreshCw size={14} /> {refrescandoDatos ? '...' : 'Sync'}
+          </button>
           <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
             <User size={14} /> Perfil
           </button>
