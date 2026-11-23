@@ -360,6 +360,7 @@ export default function App() {
     foto: ''
   });
 
+  // Solo entrenadores y directiva pueden asignar demarcación (Ala/Portero/etc.) y goles
   const rolActual = String(perfil?.rol || '').toLowerCase();
   const puedeGestionarAlaYGoles =
     Boolean(isAdmin) ||
@@ -915,6 +916,7 @@ export default function App() {
   };
 
   const sumarGol = async (jugador, delta) => {
+    if (!puedeGestionarAlaYGoles) return;
     const nuevosGoles = Math.max(0, Number(jugador.goles || 0) + delta);
     const actualizada = plantilla.map((j) => (j.id === jugador.id ? { ...j, goles: nuevosGoles } : j));
     guardarPlantillaLocal(actualizada);
@@ -1042,7 +1044,7 @@ export default function App() {
     const actualizada = [...plantilla, { id: idTemporal, ...item }];
     guardarPlantillaLocal(actualizada);
     setShowForm(false);
-    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', goles: '', foto: '' });
+    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', goles: '0', foto: '' });
 
     if (firebaseOk) {
       try {
@@ -1608,12 +1610,15 @@ export default function App() {
                         <div style={{ fontWeight: 700, fontSize: 15 }}>
                           {idx + 1}º · {j.nombre}
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{j.categoria} · {j.posicion}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          {j.categoria}
+                          {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
+                        </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span className="tag result"><Award size={12} style={{ verticalAlign: 'middle' }} /> {j.goles || 0}</span>
-                      {isAdmin && (
+                      {puedeGestionarAlaYGoles && (
                         <>
                           <button className="btn-rsvp" onClick={() => sumarGol(j, -1)}>-</button>
                           <button className="btn-rsvp yes" onClick={() => sumarGol(j, 1)}>+</button>
@@ -1705,7 +1710,8 @@ export default function App() {
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                       {j.categoria}
-                      {puedeGestionarAlaYGoles ? ` · ${j.posicion} · ${j.goles || 0} goles` : ''}
+                      {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
+                      {puedeGestionarAlaYGoles ? ` · ${j.goles || 0} goles` : ''}
                     </div>
                   </div>
                 </div>
