@@ -1,10 +1,10 @@
 :root {
   --primary: #0f294a;
   --accent: #eab308;
-  --bg: #f1f5f9;
-  --card: #ffffff;
+  --bg: #7f1d1d;
+  --card: rgba(255, 255, 255, 0.95);
   --text: #0f172a;
-  --muted: #64748b;
+  --muted: #475569;
   --border: #e2e8f0;
   --danger: #dc2626;
   --success: #16a34a;
@@ -20,9 +20,21 @@
 }
 
 body {
-  background-color: var(--bg);
+  background-color: #7f1d1d;
+  background-image:
+    radial-gradient(circle at 50% 42%, rgba(254, 240, 138, 0.28) 0%, rgba(127, 29, 29, 0.55) 72%),
+    repeating-conic-gradient(
+      from -4deg at 50% 42%,
+      #dc2626 0deg 8deg,
+      #eab308 8deg 16deg,
+      #991b1b 16deg 24deg,
+      #facc15 24deg 32deg
+    );
+  background-attachment: fixed;
+  background-size: cover;
   color: var(--text);
   padding-bottom: 84px;
+  min-height: 100vh;
 }
 
 .signo-mujer {
@@ -171,6 +183,10 @@ body {
   align-items: center;
   margin-bottom: 14px;
   gap: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
 }
 
 .section-title {
@@ -212,6 +228,7 @@ body {
   padding: 15px;
   margin-bottom: 12px;
   border: 1px solid var(--border);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
 }
 
 .mi-perfil-card {
@@ -407,13 +424,14 @@ img[alt*="Foto de perfil"] {
 }
 
 .form-box {
-  background: #e2e8f0;
+  background: rgba(241, 245, 249, 0.96);
   padding: 14px;
   border-radius: 12px;
   margin-bottom: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  border: 1px solid var(--border);
 }
 
 .form-box input,
@@ -461,6 +479,7 @@ td {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.16);
 }
 
 .msg.mine {
@@ -499,7 +518,7 @@ td {
   bottom: 0;
   left: 0;
   right: 0;
-  background: white;
+  background: rgba(255, 255, 255, 0.97);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
@@ -527,7 +546,12 @@ td {
 
 .status-pill {
   font-size: 11px;
+  font-weight: 700;
   text-align: center;
-  color: var(--muted);
-  margin-top: 16px;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.65);
+  padding: 5px 12px;
+  border-radius: 999px;
+  width: fit-content;
+  margin: 16px auto 0;
 }
