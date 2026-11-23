@@ -80,6 +80,57 @@ function TextoConSignoGenero({ texto }) {
   );
 }
 
+function SelectorCategoriaYGenero({ valorActual, onChangeValor }) {
+  const textoActual = String(valorActual || '');
+  const generoActual = textoActual.endsWith('♀')
+    ? '♀'
+    : textoActual.endsWith('♂')
+    ? '♂'
+    : '';
+  const baseActual = CATEGORIAS_BASE.find((c) => textoActual.startsWith(c)) || '';
+
+  const seleccionar = (nuevaBase, nuevoGenero) => {
+    const baseElegida = nuevaBase || baseActual || 'Senior';
+    const generoElegido = nuevoGenero || generoActual || '♂';
+    onChangeValor(`${baseElegida} ${generoElegido}`);
+  };
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <select
+        style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+        value={valorActual}
+        onChange={(e) => onChangeValor(e.target.value)}
+        required
+      >
+        <option value="">Selecciona tu categoría *</option>
+        {CATEGORIAS_CLUB.map((cat) => (
+          <option key={cat} value={cat}>{cat}</option>
+        ))}
+      </select>
+
+      <div className="selector-genero-grid">
+        <button
+          type="button"
+          className={`btn-genero ${generoActual === '♂' ? 'activo-hombre' : ''}`}
+          onClick={() => seleccionar(baseActual, '♂')}
+        >
+          <span>{baseActual || 'Categoría'}</span>
+          <span className="signo-hombre">♂</span>
+        </button>
+        <button
+          type="button"
+          className={`btn-genero ${generoActual === '♀' ? 'activo-mujer' : ''}`}
+          onClick={() => seleccionar(baseActual, '♀')}
+        >
+          <span>{baseActual || 'Categoría'}</span>
+          <span className="signo-mujer">♀</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const ROLES_ESPECIALES_DIRECTIVA = [
   { value: 'Entrenador', label: 'Entrenador' },
   { value: '2º Entrenador', label: '2º Entrenador' },
@@ -1282,17 +1333,10 @@ export default function App() {
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
-                <select
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
-                  value={formCategoria}
-                  onChange={(e) => setFormCategoria(e.target.value)}
-                  required
-                >
-                  <option value="">Selecciona tu categoría *</option>
-                  {CATEGORIAS_CLUB.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                <SelectorCategoriaYGenero
+                  valorActual={formCategoria}
+                  onChangeValor={(val) => setFormCategoria(val)}
+                />
               </div>
 
               <div>
@@ -1416,17 +1460,10 @@ export default function App() {
 
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
-                  <select
-                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
-                    value={formCategoria}
-                    onChange={(e) => setFormCategoria(e.target.value)}
-                    required
-                  >
-                    <option value="">Selecciona tu categoría *</option>
-                    {CATEGORIAS_CLUB.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <SelectorCategoriaYGenero
+                    valorActual={formCategoria}
+                    onChangeValor={(val) => setFormCategoria(val)}
+                  />
                 </div>
               </>
             )}
@@ -1512,11 +1549,10 @@ export default function App() {
 
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddPartido}>
-                <select value={nuevoPartido.categoria} onChange={(e) => setNuevoPartido({ ...nuevoPartido, categoria: e.target.value })}>
-                  {CATEGORIAS_CLUB.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                <SelectorCategoriaYGenero
+                  valorActual={nuevoPartido.categoria}
+                  onChangeValor={(val) => setNuevoPartido({ ...nuevoPartido, categoria: val })}
+                />
                 <input placeholder="Local" value={nuevoPartido.local} onChange={(e) => setNuevoPartido({ ...nuevoPartido, local: e.target.value })} />
                 <input placeholder="Visitante *" required value={nuevoPartido.visitante} onChange={(e) => setNuevoPartido({ ...nuevoPartido, visitante: e.target.value })} />
                 <input placeholder="Día y Hora (Sábado 18:30)" value={nuevoPartido.fecha} onChange={(e) => setNuevoPartido({ ...nuevoPartido, fecha: e.target.value })} />
@@ -1706,16 +1742,10 @@ export default function App() {
                     <option value="Entrenador">Entrenador</option>
                   </select>
                 )}
-                <select
-                  required
-                  value={nuevoJugador.categoria}
-                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, categoria: e.target.value })}
-                >
-                  <option value="">Selecciona categoría *</option>
-                  {CATEGORIAS_CLUB.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                <SelectorCategoriaYGenero
+                  valorActual={nuevoJugador.categoria}
+                  onChangeValor={(val) => setNuevoJugador({ ...nuevoJugador, categoria: val })}
+                />
                 {puedeGestionarAlaYGoles && (
                   <input
                     type="number"
