@@ -34,7 +34,8 @@ import {
   LogOut,
   UserPlus,
   Download,
-  CopyX
+  CopyX,
+  Phone
 } from 'lucide-react';
 
 const PIN_INICIAL_OBLIGATORIO = '1234';
@@ -92,6 +93,16 @@ const TEXTO_MUESTRA_CLASIFICACION = `#	Equipo	Pts	PJ	PG	PE	PP	GF	GC	Dif
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
 const REGEX_SOLO_JORNADA = /^jornada\s*\d+(\s*\([^)]*\))?$/i;
+
+function limpiarTelefono(tel) {
+  return String(tel || '').replace(/[^\d+]/g, '').trim();
+}
+
+function normalizarEdad(edad) {
+  const num = Number(String(edad ?? '').trim());
+  if (!Number.isInteger(num) || num < 1 || num > 99) return '';
+  return String(num);
+}
 
 function obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTexto = '') {
   const limpio = String(pabellonTexto || '').trim();
@@ -1046,6 +1057,7 @@ function TarjetaMiPerfil({
 }) {
   const dorsalLimpio = String(perfil?.dorsal || '').trim();
   const mostrarDorsal = !sinDorsalUsuarioActual && dorsalLimpio !== '' && dorsalLimpio !== '0';
+  const edadLimpia = normalizarEdad(perfil?.edad || '');
 
   return (
     <div className="card mi-perfil-card">
@@ -1069,11 +1081,17 @@ function TarjetaMiPerfil({
           ) : (
             <>
               {perfil.rol} · <TextoConSignoGenero texto={perfil.categoria || 'Sin categoría'} />
+              {edadLimpia ? ` · ${edadLimpia} años` : ''}
             </>
           )}
         </div>
+        {perfil.telefono && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+            Tel: {perfil.telefono}
+          </div>
+        )}
         <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
-          Editar foto, nombre, dorsal o contraseña
+          Editar foto, nombre, dorsal, edad, teléfono o contraseña
         </button>
       </div>
     </div>
@@ -1111,10 +1129,10 @@ const DEMO_CLASIFICACION = [
 ];
 
 const DEMO_PLANTILLA = [
-  { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Senior ♂', goles: 14, foto: '' },
-  { id: 'p2', dorsal: '7', nombre: 'Alejandro Ruiz', posicion: 'Ala', categoria: 'Senior ♂', goles: 11, foto: '' },
-  { id: 'p3', dorsal: '4', nombre: 'Javier Gómez', posicion: 'Cierre', categoria: 'Senior ♂', goles: 6, foto: '' },
-  { id: 'p4', dorsal: '1', nombre: 'Carlos Martínez', posicion: 'Portero', categoria: 'Senior ♂', goles: 1, foto: '' }
+  { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Senior ♂', edad: '24', goles: 14, foto: '', telefono: '' },
+  { id: 'p2', dorsal: '7', nombre: 'Alejandro Ruiz', posicion: 'Ala', categoria: 'Senior ♂', edad: '22', goles: 11, foto: '', telefono: '' },
+  { id: 'p3', dorsal: '4', nombre: 'Javier Gómez', posicion: 'Cierre', categoria: 'Senior ♂', edad: '25', goles: 6, foto: '', telefono: '' },
+  { id: 'p4', dorsal: '1', nombre: 'Carlos Martínez', posicion: 'Portero', categoria: 'Senior ♂', edad: '27', goles: 1, foto: '', telefono: '' }
 ];
 
 const DEMO_AVISOS = [
@@ -1172,9 +1190,11 @@ function perfilJugadorCompleto(p) {
   const nombreOk = Boolean(p.nombre && p.nombre.trim().length >= 2);
   const dorsalOk = Boolean(p.dorsal && String(p.dorsal).trim().length > 0 && String(p.dorsal).trim() !== '0');
   const categoriaOk = Boolean(p.categoria && String(p.categoria).trim().length > 0);
+  const telefonoOk = Boolean(limpiarTelefono(p.telefono).length >= 6);
+  const edadOk = Boolean(normalizarEdad(p.edad));
   const fotoOk = Boolean(p.foto && p.foto.length > 0);
   const pinOk = Boolean(p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
-  return nombreOk && dorsalOk && categoriaOk && fotoOk && pinOk;
+  return nombreOk && dorsalOk && categoriaOk && telefonoOk && edadOk && fotoOk && pinOk;
 }
 
 function leerListaLocal(clave, respaldo) {
@@ -1241,6 +1261,8 @@ export default function App() {
           rol: 'Jugador',
           categoria: '',
           dorsal: '',
+          telefono: '',
+          edad: '',
           foto: '',
           pinUsuario: '',
           esReservaDirectiva: false
@@ -1263,6 +1285,8 @@ export default function App() {
   const [formRol, setFormRol] = useState(perfil.rol || 'Jugador');
   const [formCategoria, setFormCategoria] = useState(perfil.categoria || '');
   const [formDorsal, setFormDorsal] = useState(perfil.dorsal === '0' ? '' : (perfil.dorsal || ''));
+  const [formTelefono, setFormTelefono] = useState(perfil.telefono || '');
+  const [formEdad, setFormEdad] = useState(perfil.edad || '');
   const [formFoto, setFormFoto] = useState(perfil.foto || '');
   const [formPinNuevo, setFormPinNuevo] = useState(perfil.pinUsuario || '');
   const [formPinConfirm, setFormPinConfirm] = useState(perfil.pinUsuario || '');
@@ -1275,6 +1299,10 @@ export default function App() {
   });
 
   const rolActual = String(perfil?.rol || '').toLowerCase();
+  const puedeVerTelefonosPrivados =
+    Boolean(isAdmin) ||
+    rolActual.includes('entrenador') ||
+    rolActual.includes('directiva');
   const puedeGestionarAlaYGoles =
     Boolean(isAdmin) ||
     rolActual.includes('entrenador') ||
@@ -1464,11 +1492,15 @@ export default function App() {
   const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
     if (esRolSinDorsal(perfilDatos.rol)) return;
     const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '')}`;
+    const telefonoLimpio = limpiarTelefono(perfilDatos.telefono);
+    const edadLimpia = normalizarEdad(perfilDatos.edad);
     const jugadorDoc = {
       dorsal: String(perfilDatos.dorsal).trim(),
       nombre: perfilDatos.nombre.trim(),
       posicion: 'Sin asignar',
       categoria: perfilDatos.categoria || '',
+      telefono: telefonoLimpio,
+      edad: edadLimpia,
       goles: 0,
       foto: perfilDatos.foto || '',
       createdAt: serverTimestamp()
@@ -1492,6 +1524,8 @@ export default function App() {
     const dorsalRaw = String(perfilDatos.dorsal || '').trim();
     const dorsalLimpio = (esEspecial || dorsalRaw === '0') ? '' : dorsalRaw;
     const categoriaLimpia = esEspecial ? (perfilDatos.rol || 'Entrenador') : (perfilDatos.categoria || '');
+    const telefonoLimpio = limpiarTelefono(perfilDatos.telefono);
+    const edadLimpia = esEspecial ? '' : normalizarEdad(perfilDatos.edad);
     const idDoc = crearIdPerfil(perfilDatos.nombre, dorsalLimpio, perfilDatos.correo || '');
     const registroPublico = {
       id: idDoc,
@@ -1500,6 +1534,8 @@ export default function App() {
       rol: perfilDatos.rol || 'Jugador',
       categoria: categoriaLimpia,
       dorsal: dorsalLimpio,
+      telefono: telefonoLimpio,
+      edad: edadLimpia,
       foto: perfilDatos.foto || '',
       pinUsuario: perfilDatos.pinUsuario || '',
       esReservaDirectiva: Boolean(perfilDatos.esReservaDirectiva || esEspecial),
@@ -1520,7 +1556,13 @@ export default function App() {
     }
 
     if (!esEspecial) {
-      await sincronizarJugadorEnPlantilla({ ...perfilDatos, dorsal: dorsalLimpio, categoria: categoriaLimpia });
+      await sincronizarJugadorEnPlantilla({
+        ...perfilDatos,
+        dorsal: dorsalLimpio,
+        categoria: categoriaLimpia,
+        telefono: telefonoLimpio,
+        edad: edadLimpia
+      });
     }
   };
 
@@ -1542,6 +1584,8 @@ export default function App() {
         rol: 'Directiva',
         categoria: 'Directiva',
         dorsal: '',
+        telefono: limpiarTelefono(perfil.telefono || ''),
+        edad: normalizarEdad(perfil.edad || ''),
         foto: perfil.foto || '',
         pinUsuario: pinIntroducido,
         esReservaDirectiva: false
@@ -1569,6 +1613,8 @@ export default function App() {
         rol: 'Jugador',
         categoria: '',
         dorsal: '',
+        telefono: '',
+        edad: '',
         foto: '',
         pinUsuario: '',
         esReservaDirectiva: false
@@ -1579,6 +1625,8 @@ export default function App() {
       setFormRol('Jugador');
       setFormCategoria('');
       setFormDorsal('');
+      setFormTelefono('');
+      setFormEdad('');
       setFormFoto('');
       setFormPinNuevo('');
       setFormPinConfirm('');
@@ -1614,6 +1662,8 @@ export default function App() {
           rol: coincidenciaIdentidad.rol || 'Jugador',
           categoria: esEspecial ? (coincidenciaIdentidad.rol || 'Entrenador') : (coincidenciaIdentidad.categoria || ''),
           dorsal: (esEspecial || dorsalItem === '0') ? '' : dorsalItem,
+          telefono: limpiarTelefono(coincidenciaIdentidad.telefono || ''),
+          edad: esEspecial ? '' : normalizarEdad(coincidenciaIdentidad.edad || ''),
           foto: coincidenciaIdentidad.foto || '',
           pinUsuario: coincidenciaIdentidad.pinUsuario,
           esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva || esEspecial),
@@ -1653,6 +1703,8 @@ export default function App() {
     const dorsalRaw = String(formDorsal || '').trim();
     const dorsalLimpio = (esEspecial || dorsalRaw === '0') ? '' : dorsalRaw;
     const categoriaLimpia = esEspecial ? (formRol || 'Entrenador') : String(formCategoria).trim();
+    const telefonoLimpio = limpiarTelefono(formTelefono);
+    const edadLimpia = esEspecial ? '' : normalizarEdad(formEdad);
     const pinLimpio = formPinNuevo.trim();
 
     if (nombreLimpio.length < 2) {
@@ -1665,6 +1717,14 @@ export default function App() {
     }
     if (!esEspecial && !categoriaLimpia) {
       alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    if (!esEspecial && telefonoLimpio.length < 6) {
+      alert('El campo Teléfono * es obligatorio para la ficha del club (mínimo 6 dígitos).');
+      return;
+    }
+    if (!esEspecial && !edadLimpia) {
+      alert('El campo Edad * es obligatorio (entre 1 y 99 años).');
       return;
     }
     const idActualPerfil = perfil?.nombre
@@ -1696,6 +1756,8 @@ export default function App() {
       rol: formRol || 'Jugador',
       categoria: categoriaLimpia,
       dorsal: dorsalLimpio,
+      telefono: telefonoLimpio,
+      edad: edadLimpia,
       foto: formFoto,
       pinUsuario: pinLimpio,
       esReservaDirectiva: esEspecial
@@ -1740,6 +1802,8 @@ export default function App() {
       rol: rolElegido,
       categoria: rolElegido,
       dorsal: '',
+      telefono: '',
+      edad: '',
       foto: nuevoPerfilEspecial.foto || '',
       pinUsuario: pinLimpio,
       esReservaDirectiva: true,
@@ -1787,6 +1851,8 @@ export default function App() {
     setFormRol(perfil.rol || 'Jugador');
     setFormCategoria(perfil.categoria || '');
     setFormDorsal(dorsalActual === '0' ? '' : dorsalActual);
+    setFormTelefono(perfil.telefono || '');
+    setFormEdad(perfil.edad || '');
     setFormFoto(perfil.foto || '');
     setFormPinNuevo(perfil.pinUsuario || '');
     setFormPinConfirm(perfil.pinUsuario || '');
@@ -1854,6 +1920,8 @@ export default function App() {
     nombre: '',
     posicion: 'Ala',
     categoria: '',
+    telefono: '',
+    edad: '',
     goles: '0',
     foto: ''
   });
@@ -2471,6 +2539,8 @@ export default function App() {
     const dorsalLimpio = String(nuevoJugador.dorsal || '').trim();
     const nombreLimpio = String(nuevoJugador.nombre || '').trim();
     const categoriaLimpia = String(nuevoJugador.categoria || '').trim();
+    const telefonoLimpio = limpiarTelefono(nuevoJugador.telefono);
+    const edadLimpia = normalizarEdad(nuevoJugador.edad);
 
     if (!dorsalLimpio) {
       alert('El campo Dorsal / Número * es obligatorio.');
@@ -2482,6 +2552,14 @@ export default function App() {
     }
     if (!categoriaLimpia) {
       alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    if (telefonoLimpio.length < 6) {
+      alert('El campo Teléfono * es obligatorio para la ficha del club.');
+      return;
+    }
+    if (!edadLimpia) {
+      alert('El campo Edad * es obligatorio (entre 1 y 99 años).');
       return;
     }
     if (existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia)) {
@@ -2499,6 +2577,8 @@ export default function App() {
       nombre: nombreLimpio,
       posicion: puedeGestionarAlaYGoles ? (nuevoJugador.posicion || 'Ala') : 'Sin asignar',
       categoria: categoriaLimpia,
+      telefono: telefonoLimpio,
+      edad: edadLimpia,
       goles: puedeGestionarAlaYGoles ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
       createdAt: serverTimestamp()
     };
@@ -2506,7 +2586,7 @@ export default function App() {
     const actualizada = [...plantilla, { id: idTemporal, ...item }];
     guardarPlantillaLocal(actualizada);
     setShowForm(false);
-    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', goles: '0', foto: '' });
+    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', telefono: '', edad: '', goles: '0', foto: '' });
 
     if (firebaseOk) {
       try {
@@ -2603,6 +2683,8 @@ export default function App() {
         rol: perfil.rol || 'Jugador',
         categoria: esRolSinDorsal(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
         dorsal: (esRolSinDorsal(perfil.rol) || dorsalPerfil === '0') ? '' : dorsalPerfil,
+        telefono: limpiarTelefono(perfil.telefono || ''),
+        edad: esRolSinDorsal(perfil.rol) ? '' : normalizarEdad(perfil.edad || ''),
         foto: perfil.foto || '',
         esReservaDirectiva: Boolean(perfil.esReservaDirectiva)
       });
@@ -2739,6 +2821,8 @@ export default function App() {
   const renderFilaPerfil = (item) => {
     const esEspecialItem = esRolSinDorsal(item.rol);
     const dorsalItem = String(item.dorsal || '').trim();
+    const telefonoItem = limpiarTelefono(item.telefono || '');
+    const edadItem = normalizarEdad(item.edad || '');
     return (
       <div key={item.id} className="card player-row">
         <div className="player-info">
@@ -2758,9 +2842,17 @@ export default function App() {
               ) : (
                 <>
                   {item.rol} · <TextoConSignoGenero texto={item.categoria || 'Sin categoría'} />
+                  {edadItem ? ` · ${edadItem} años` : ''}
                 </>
               )}
             </div>
+            {puedeVerTelefonosPrivados && !esEspecialItem && telefonoItem && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginTop: 2 }}>
+                <a href={`tel:${telefonoItem}`} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Phone size={12} /> {telefonoItem}
+                </a>
+              </div>
+            )}
           </div>
         </div>
         {isAdmin && (
@@ -2832,6 +2924,8 @@ export default function App() {
                   setFormNombre('');
                   setFormDorsal('');
                   setFormCategoria('');
+                  setFormTelefono('');
+                  setFormEdad('');
                   setFormFoto('');
                   setFormPinNuevo('');
                   setFormPinConfirm('');
@@ -2846,7 +2940,7 @@ export default function App() {
                 <UserPlus size={19} /> Registro de Jugador
               </div>
               <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 700 }}>
-                Todos los campos marcados con * son obligatorios.
+                Todos los campos marcados con * son obligatorios. Tu teléfono solo será visible para Directiva y entrenadores.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
@@ -2888,6 +2982,32 @@ export default function App() {
                   placeholder="Ej. 10 *"
                   value={formDorsal}
                   onChange={(e) => setFormDorsal(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Edad *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Ej. 16 *"
+                  value={formEdad}
+                  onChange={(e) => setFormEdad(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Teléfono de contacto (ficha del club) *</label>
+                <input
+                  type="tel"
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Ej. 600123456 *"
+                  value={formTelefono}
+                  onChange={(e) => setFormTelefono(e.target.value)}
                   required
                 />
               </div>
@@ -3015,6 +3135,32 @@ export default function App() {
                     placeholder="Ej. 10 *"
                     value={formDorsal}
                     onChange={(e) => setFormDorsal(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Edad *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    placeholder="Ej. 16 *"
+                    value={formEdad}
+                    onChange={(e) => setFormEdad(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Teléfono de contacto (ficha del club) *</label>
+                  <input
+                    type="tel"
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    placeholder="Ej. 600123456 *"
+                    value={formTelefono}
+                    onChange={(e) => setFormTelefono(e.target.value)}
                     required
                   />
                 </div>
@@ -3590,6 +3736,22 @@ export default function App() {
                   value={nuevoJugador.nombre}
                   onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })}
                 />
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  placeholder="Edad del jugador (ej. 16) *"
+                  required
+                  value={nuevoJugador.edad}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, edad: e.target.value })}
+                />
+                <input
+                  type="tel"
+                  placeholder="Teléfono del jugador (ficha del club) *"
+                  required
+                  value={nuevoJugador.telefono}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, telefono: e.target.value })}
+                />
                 {puedeGestionarAlaYGoles && (
                   <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
                     <option value="Portero">Portero</option>
@@ -3624,31 +3786,43 @@ export default function App() {
               </form>
             )}
 
-            {plantilla.map((j) => (
-              <div key={j.id} className="card player-row">
-                <div className="player-info">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                    <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
-                    {j.dorsal && j.dorsal !== '0' && (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      <TextoConSignoGenero texto={j.categoria} />
-                      {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
-                      {puedeGestionarAlaYGoles ? ` · ${j.goles || 0} goles` : ''}
+            {plantilla.map((j) => {
+              const telJugador = limpiarTelefono(j.telefono || '');
+              const edadJugador = normalizarEdad(j.edad || '');
+              return (
+                <div key={j.id} className="card player-row">
+                  <div className="player-info">
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
+                      {j.dorsal && j.dorsal !== '0' && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        <TextoConSignoGenero texto={j.categoria} />
+                        {edadJugador ? ` · ${edadJugador} años` : ''}
+                        {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
+                        {puedeGestionarAlaYGoles ? ` · ${j.goles || 0} goles` : ''}
+                      </div>
+                      {puedeVerTelefonosPrivados && telJugador && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginTop: 2 }}>
+                          <a href={`tel:${telJugador}`} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Phone size={12} /> {telJugador}
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {isAdmin && (
+                    <button className="btn-danger" onClick={() => handleDelete('plantilla', j.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
-                {isAdmin && (
-                  <button className="btn-danger" onClick={() => handleDelete('plantilla', j.id)}>
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
