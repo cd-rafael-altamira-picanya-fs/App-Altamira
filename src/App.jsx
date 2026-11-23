@@ -116,8 +116,7 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       boxRef.current.style.setProperty('align-items', 'center', 'important');
       boxRef.current.style.setProperty('justify-content', 'center', 'important');
       boxRef.current.style.setProperty('flex-shrink', '0', 'important');
-      boxRef.current.style.setProperty('z-index', '1', 'important');
-      boxRef.current.style.setProperty('isolation', 'isolate', 'important');
+      boxRef.current.style.setProperty('margin', '0 auto', 'important');
     }
     if (imgRef.current) {
       imgRef.current.style.setProperty('width', px, 'important');
@@ -1168,10 +1167,10 @@ export default function App() {
                   letra={formNombre?.[0] || 'J'}
                   tamano={76}
                 />
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
                   Dorsal: #{formDorsal || '-'}
                 </div>
-                <label className="btn-primary" style={{ cursor: 'pointer', position: 'relative', zIndex: 2 }}>
+                <label className="btn-primary" style={{ cursor: 'pointer' }}>
                   <Camera size={15} /> Subir foto *
                   <input
                     type="file"
@@ -1299,11 +1298,11 @@ export default function App() {
                 tamano={76}
               />
               {!editandoEspecial && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
                   Dorsal: #{formDorsal || '-'}
                 </div>
               )}
-              <label className="btn-primary" style={{ cursor: 'pointer', position: 'relative', zIndex: 2 }}>
+              <label className="btn-primary" style={{ cursor: 'pointer' }}>
                 <Camera size={15} /> {editandoEspecial ? 'Subir foto' : 'Subir foto *'}
                 <input
                   type="file"
@@ -1558,10 +1557,10 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
                         {j.dorsal && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>#{j.dorsal}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
                         )}
                       </div>
-                      <div style={{ position: 'relative', zIndex: 2 }}>
+                      <div>
                         <div style={{ fontWeight: 700, fontSize: 15 }}>
                           {idx + 1}º · {j.nombre}
                         </div>
@@ -1655,10 +1654,10 @@ export default function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
                     {j.dorsal && (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>#{j.dorsal}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
                     )}
                   </div>
-                  <div style={{ position: 'relative', zIndex: 2 }}>
+                  <div>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                       {j.categoria}
@@ -1835,39 +1834,69 @@ export default function App() {
 
             {perfilSubtab === 'mi-perfil' && (
               <>
-                <div
-                  className="card"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                    gap: 10,
-                    padding: 20
-                  }}
-                >
-                  <AvatarCircular
-                    src={perfil.foto}
-                    alt={perfil.nombre}
-                    letra={perfil.nombre?.[0] || 'U'}
-                    tamano={76}
-                  />
-                  {!sinDorsalUsuarioActual && perfil.dorsal && (
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2, clear: 'both' }}>
-                      #{perfil.dorsal}
+                <div className="card" style={{ padding: 20 }}>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                    {perfil.foto ? (
+                      <img
+                        src={perfil.foto}
+                        alt={perfil.nombre || 'Foto de perfil'}
+                        style={{
+                          width: 76,
+                          height: 76,
+                          minWidth: 76,
+                          minHeight: 76,
+                          maxWidth: 76,
+                          maxHeight: 76,
+                          borderRadius: '9999px',
+                          objectFit: 'cover',
+                          objectPosition: 'center',
+                          border: '2px solid #cbd5e1',
+                          display: 'block'
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 76,
+                          height: 76,
+                          minWidth: 76,
+                          minHeight: 76,
+                          maxWidth: 76,
+                          maxHeight: 76,
+                          borderRadius: '9999px',
+                          backgroundColor: '#1e3a8a',
+                          color: '#ffffff',
+                          fontWeight: 800,
+                          fontSize: 26,
+                          border: '2px solid #cbd5e1',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {perfil.nombre?.[0] || 'U'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ width: '100%', textAlign: 'center', display: 'block' }}>
+                    {!sinDorsalUsuarioActual && perfil.dorsal && (
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>
+                        #{perfil.dorsal}
+                      </div>
+                    )}
+                    <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a', marginBottom: 4, display: 'block' }}>
+                      {perfil.nombre}
                     </div>
-                  )}
-                  <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a', position: 'relative', zIndex: 2, clear: 'both' }}>
-                    {perfil.nombre}
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, display: 'block' }}>
+                      {sinDorsalUsuarioActual
+                        ? (perfil.categoria || perfil.rol)
+                        : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
+                    </div>
+                    <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
+                      Editar foto, nombre, dorsal o contraseña
+                    </button>
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, position: 'relative', zIndex: 2, clear: 'both' }}>
-                    {sinDorsalUsuarioActual
-                      ? (perfil.categoria || perfil.rol)
-                      : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
-                  </div>
-                  <button type="button" className="btn-primary" style={{ position: 'relative', zIndex: 2, clear: 'both' }} onClick={handleAbrirEditarPerfil}>
-                    Editar foto, nombre, dorsal o contraseña
-                  </button>
                 </div>
 
                 {isAdmin && (
@@ -1909,7 +1938,7 @@ export default function App() {
                         letra={nuevoPerfilEspecial.nombre?.[0] || 'E'}
                         tamano={48}
                       />
-                      <label className="btn-rsvp" style={{ cursor: 'pointer', position: 'relative', zIndex: 2 }}>
+                      <label className="btn-rsvp" style={{ cursor: 'pointer' }}>
                         <Camera size={14} /> Foto (opcional)
                         <input
                           type="file"
@@ -1980,10 +2009,10 @@ export default function App() {
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                             <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
                             {!esEspecialItem && item.dorsal && (
-                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', position: 'relative', zIndex: 2 }}>#{item.dorsal}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{item.dorsal}</span>
                             )}
                           </div>
-                          <div style={{ position: 'relative', zIndex: 2 }}>
+                          <div>
                             <div style={{ fontWeight: 700, fontSize: 15 }}>
                               {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
                             </div>
