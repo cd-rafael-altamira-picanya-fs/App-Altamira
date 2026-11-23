@@ -59,16 +59,26 @@ const URLS_POR_DEFECTO = [
   'https://www.elbalondelacomunitat.es/equipo/905540140/partidos'
 ];
 
-const TEXTO_MUESTRA_FUTBUTEO = `VIERNES 27 NOV
-18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA
-19:15 · ALEVÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA
-20:00 · 2ª REGIONAL JUVENIL FÚTBOL SALA · C.F.S. Aliança Quart de Poblet 'A' · FUERA
+const TEXTO_MUESTRA_FFCV = `Jornada 8 (15-11-2026)
+C.D. Rafael Altamira Picanya "A" - Descansa-1
 
-SÁBADO 28 NOV
-20:30 · LIGA PROVINCIAL PROMOCIÓN VALENTA FÚTBOL SALA · Maristas Cullera · CASA
+Jornada 9 (22-11-2026)
+C.D. Maguen Alfafar F.S. - C.D. Rafael Altamira Picanya "A"
 
-DOMINGO 6 DIC
-10:00 · LIGA PROVINCIAL PROMOCIÓN VALENTA FÚTBOL SALA · C.F.S. Aliança Quart de Poblet 'A' · FUERA`;
+Jornada 10 (29-11-2026)
+C.D. Rafael Altamira Picanya "A" - Maristas Cullera
+
+Jornada 11 (06-12-2026)
+C.F.S. Aliança Quart de Poblet "A" - C.D. Rafael Altamira Picanya "A"
+
+Jornada 12 (13-12-2026)
+C.D. Rafael Altamira Picanya "A" - C.D. Inter Marjal
+
+Jornada 13 (20-12-2026)
+C.F.S. L'Olleria La Vall d'Albaida "A" - C.D. Rafael Altamira Picanya "A"
+
+Jornada 14 (10-01-2027)
+C.D. Rafael Altamira Picanya "A" - Santa Ana Algemesí C.D.`;
 
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
@@ -121,7 +131,7 @@ function extraerFechaDeTexto(texto) {
     const mes = matchFecha[2].padStart(2, '0');
     let anio = matchFecha[3];
     if (anio.length === 2) anio = `20${anio}`;
-    return horaMatch ? `${dia}/${mes}/${anio} ${horaMatch[0]}` : `${dia}/${mes}/${anio}`;
+    return horaMatch ? `${dia}-${mes}-${anio} · ${horaMatch[0]}` : `${dia}-${mes}-${anio}`;
   }
 
   const matchDiaMes = str.match(/\b(\d{1,2})\s+de\s+([a-záéíóú]+)(?:\s+de\s+(\d{4}))?\b/i);
@@ -167,18 +177,32 @@ function limpiarNombreRival(texto) {
   return limpio;
 }
 
+function esEquipoClubAltamira(nombre) {
+  return /rafael altamira|picanya/i.test(String(nombre || ''));
+}
+
 function parsearPartidosDesdeTexto(textoCrudo) {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
 
-  let fechaActual = 'Próximamente';
+  let fechaActual = 'Por confirmar';
+  let jornadaActual = '';
   const resultados = [];
 
   const regexDiaEncabezado = /^(LUNES|MARTES|MIERCOLES|MIÉRCOLES|JUEVES|VIERNES|SABADO|SÁBADO|DOMINGO)\s*,?\s*\d{1,2}\s+(DE\s+)?[A-ZÁÉÍÓÚ]{3,}/i;
+  const regexJornadaEncabezado = /^Jornada\s*\d+/i;
 
   for (const linea of lineas) {
+    if (regexJornadaEncabezado.test(linea)) {
+      const numJornada = linea.match(/^Jornada\s*\d+/i)?.[0] || linea;
+      jornadaActual = numJornada;
+      const fechaEnJornada = extraerFechaDeTexto(linea);
+      fechaActual = fechaEnJornada ? `${fechaEnJornada} (${numJornada})` : numJornada;
+      continue;
+    }
+
     if (regexDiaEncabezado.test(linea)) {
       fechaActual = linea
         .toLowerCase()
@@ -189,10 +213,61 @@ function parsearPartidosDesdeTexto(textoCrudo) {
     const horaMatch = linea.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
     const hora = horaMatch ? horaMatch[0] : '';
 
-    const esFuera = /\bFUERA\b/i.test(linea);
+    // Caso 1: Enfrentamiento tipo "Equipo A - Equipo B" o "Equipo A – Equipo B"
+    const partesGuion = linea.split(/\s+(?:-|–|—|vs\.?)\s+/i).map((s) => s.trim()).filter(Boolean);
+    if (partesGuion.length >= 2) {
+      const eqIzq = partesGuion[0];
+      const eqDer = partesGuion[1];
 
+      if (/^descansa(-\d+)?$/i.test(eqIzq) || /^descansa(-\d+)?$/i.test(eqDer)) {
+        continue;
+      }
+
+      const izqEsAltamira = esEquipoClubAltamira(eqIzq);
+      const derEsAltamira = esEquipoClubAltamira(eqDer);
+
+      const clubLocal = 'C.D. Rafael Altamira FS';
+      let local = clubLocal;
+      let visitante = 'Rival por confirmar';
+      let esFuera = false;
+
+      if (izqEsAltamira && !derEsAltamira) {
+        local = clubLocal;
+        visitante = esTextoFechaOJornada(eqDer) ? 'Rival por confirmar' : eqDer;
+        esFuera = false;
+      } else if (derEsAltamira && !izqEsAltamira) {
+        local = esTextoFechaOJornada(eqIzq) ? 'Rival por confirmar' : eqIzq;
+        visitante = clubLocal;
+        esFuera = true;
+      } else {
+        local = esTextoFechaOJornada(eqIzq) ? 'Rival por confirmar' : eqIzq;
+        visitante = esTextoFechaOJornada(eqDer) ? 'Rival por confirmar' : eqDer;
+        esFuera = esEquipoClubAltamira(visitante);
+      }
+
+      const rivalParaPabellon = esFuera ? local : visitante;
+      const fechaExtraida = extraerFechaDeTexto(linea);
+      const fechaBase = fechaExtraida || fechaActual;
+      const fechaCompleta =
+        hora && !fechaBase.includes(hora) ? `${fechaBase} · ${hora}` : fechaBase;
+
+      resultados.push({
+        categoria: detectarCategoriaImportada(`${linea} ${jornadaActual}`),
+        local,
+        visitante,
+        fecha: fechaCompleta,
+        pabellon: esFuera
+          ? `Pabellón visitante (${rivalParaPabellon})`
+          : 'Pabellón Municipal Picanya',
+        resultado: 'VS'
+      });
+      continue;
+    }
+
+    // Caso 2: Líneas con separadores · o |
+    const esFuera = /\bFUERA\b/i.test(linea);
     const segmentos = linea
-      .split(/\s*(?:\||·| - | vs\.? | en )\s*/i)
+      .split(/\s*(?:\||·| en )\s*/i)
       .map((s) => s.trim())
       .filter(Boolean);
 
@@ -200,8 +275,9 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       const sLow = seg.toLowerCase();
       if (/^([01]?\d|2[0-3]):[0-5]\d$/.test(seg)) return false;
       if (/^(casa|fuera)$/i.test(seg)) return false;
-      if (regexDiaEncabezado.test(seg) || esTextoFechaOJornada(seg)) return false;
-      if (sLow.includes('rafael altamira') || sLow.includes('picanya')) return false;
+      if (/^descansa(-\d+)?$/i.test(seg)) return true;
+      if (regexDiaEncabezado.test(seg) || regexJornadaEncabezado.test(seg) || esTextoFechaOJornada(seg)) return false;
+      if (esEquipoClubAltamira(seg)) return false;
       if (
         sLow.includes('fútbol sala') ||
         sLow.includes('futbol sala') ||
@@ -218,17 +294,19 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       return seg.length >= 2;
     });
 
+    if (candidatoRival && /^descansa(-\d+)?$/i.test(candidatoRival)) {
+      continue;
+    }
+
     const rival = limpiarNombreRival(candidatoRival || 'Rival por confirmar');
     const clubLocal = 'C.D. Rafael Altamira FS';
     const local = esFuera ? rival : clubLocal;
     const visitante = esFuera ? clubLocal : rival;
-    const categoria = detectarCategoriaImportada(linea);
+    const categoria = detectarCategoriaImportada(`${linea} ${jornadaActual}`);
     const fechaExtraida = extraerFechaDeTexto(linea);
-    const fechaCompleta = fechaExtraida
-      ? fechaExtraida
-      : hora
-      ? `${fechaActual} ${hora}`
-      : fechaActual;
+    const fechaBase = fechaExtraida || fechaActual;
+    const fechaCompleta =
+      hora && !fechaBase.includes(hora) ? `${fechaBase} · ${hora}` : fechaBase;
     const pabellon = esFuera
       ? `Pabellón visitante (${rival})`
       : 'Pabellón Municipal Picanya';
@@ -1517,16 +1595,21 @@ export default function App() {
       const localCrudo = String(cand.local || '').trim();
       const visitanteCrudo = String(cand.visitante || '').trim();
 
+      if (/^descansa(-\d+)?$/i.test(localCrudo) || /^descansa(-\d+)?$/i.test(visitanteCrudo)) {
+        continue;
+      }
+
+      const fechaCandidata = String(cand.fecha || '').trim();
       const fechaDetectada =
-        (cand.fecha && !/^(próximamente|proximamente|por confirmar)$/i.test(String(cand.fecha).trim())
-          ? String(cand.fecha).trim()
+        (fechaCandidata && !/^(próximamente|proximamente|por confirmar)$/i.test(fechaCandidata)
+          ? fechaCandidata
           : '') ||
-        extraerFechaDeTexto(`${cand.fecha || ''} ${localCrudo} ${visitanteCrudo}`) ||
-        cand.fecha ||
+        extraerFechaDeTexto(`${fechaCandidata} ${localCrudo} ${visitanteCrudo}`) ||
+        fechaCandidata ||
         'Por confirmar';
 
-      const esLocalAltamira = /rafael altamira|picanya/i.test(localCrudo);
-      const esVisitanteAltamira = /rafael altamira|picanya/i.test(visitanteCrudo);
+      const esLocalAltamira = esEquipoClubAltamira(localCrudo);
+      const esVisitanteAltamira = esEquipoClubAltamira(visitanteCrudo);
 
       let rivalLimpio = 'Rival por confirmar';
       if (esLocalAltamira && visitanteCrudo && !esVisitanteAltamira) {
@@ -1552,12 +1635,20 @@ export default function App() {
           ? rivalLimpio
           : clubLocal;
 
+      const esFuera = localFinal !== clubLocal;
+      const rivalReferencia = esFuera ? localFinal : visitanteFinal;
+
       const itemLimpio = {
         categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
         local: localFinal,
         visitante: visitanteFinal,
         fecha: fechaDetectada,
-        pabellon: cand.pabellon || 'Pabellón Municipal Picanya',
+        pabellon:
+          cand.pabellon && !esTextoFechaOJornada(cand.pabellon)
+            ? cand.pabellon
+            : esFuera
+            ? `Pabellón visitante (${rivalReferencia})`
+            : 'Pabellón Municipal Picanya',
         resultado: cand.resultado || 'VS'
       };
 
@@ -1911,6 +2002,14 @@ export default function App() {
   const renderTarjetaPartido = (p, yaJugado = false) => {
     const asistentes = p.asistentes || [];
     const voy = asistentes.includes(perfil.nombre);
+
+    const fechaRescatada =
+      (p.fecha && !/^(próximamente|proximamente|por confirmar)$/i.test(String(p.fecha).trim())
+        ? String(p.fecha).trim()
+        : '') ||
+      extraerFechaDeTexto(`${p.fecha || ''} ${p.local || ''} ${p.visitante || ''}`) ||
+      'Por confirmar';
+
     const localTexto = esTextoFechaOJornada(p.local) ? 'Rival por confirmar' : p.local;
     const visitanteTexto = esTextoFechaOJornada(p.visitante) ? 'Rival por confirmar' : p.visitante;
     const pabellonTexto = esTextoFechaOJornada(p.pabellon)
@@ -1948,7 +2047,7 @@ export default function App() {
           <span style={{ flex: 1, textAlign: 'right' }}>{visitanteTexto}</span>
         </div>
         <div className="match-meta">
-          <span><Clock size={13} /> {p.fecha || 'Por confirmar'}</span>
+          <span><Clock size={13} /> {fechaRescatada}</span>
           <span><MapPin size={13} /> {pabellonTexto}</span>
         </div>
         <div className="rsvp-bar">
@@ -2439,20 +2538,20 @@ export default function App() {
 
                 <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
                   <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                    Si alguna web bloquea la lectura automática, pega aquí los partidos y se añadirán sin duplicar:
+                    Pega aquí las jornadas y enfrentamientos de la FFCV o del club y se añadirán sin duplicar:
                   </p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       className="btn-rsvp"
-                      onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FUTBUTEO)}
+                      onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FFCV)}
                     >
-                      Cargar muestra Futbuteo Altamira
+                      Cargar muestra FFCV Altamira
                     </button>
                   </div>
                   <textarea
                     rows="5"
-                    placeholder={`Ejemplo:\nVIERNES 27 NOV\n18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA`}
+                    placeholder={`Ejemplo:\nJornada 10 (29-11-2026)\nC.D. Rafael Altamira Picanya "A" - Maristas Cullera`}
                     value={textoImportarPartidos}
                     onChange={(e) => setTextoImportarPartidos(e.target.value)}
                     required
