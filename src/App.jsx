@@ -293,17 +293,18 @@ export default function App() {
 
   const handleIniciarSesion = (e) => {
     e.preventDefault();
-    const idIntroducido = identificadorLoginInput.trim().toLowerCase();
+    const idRaw = identificadorLoginInput.trim();
+    const idIntroducido = idRaw.toLowerCase();
     const pinIntroducido = pinLoginInput.trim();
 
-    if (!idIntroducido) {
-      alert('Introduce tu nombre o seudónimo.');
+    if (!pinIntroducido) {
+      alert('Introduce tu contraseña o PIN.');
       return;
     }
 
     if (pinIntroducido === pinDirectiva || pinIntroducido === PIN_DIRECTIVA_INICIAL) {
       const perfilDir = {
-        nombre: identificadorLoginInput.trim() || 'Directiva',
+        nombre: idRaw || 'Directiva',
         correo: idIntroducido.includes('@') ? idIntroducido : '',
         rol: 'Directiva',
         categoria: 'Club',
@@ -323,9 +324,14 @@ export default function App() {
       return;
     }
 
+    if (!idIntroducido) {
+      alert('Introduce tu nombre o seudónimo.');
+      return;
+    }
+
     if (pinIntroducido === PIN_INICIAL_OBLIGATORIO) {
       const perfilInicial = {
-        nombre: identificadorLoginInput.trim(),
+        nombre: idRaw,
         correo: idIntroducido.includes('@') ? idIntroducido : '',
         rol: 'Jugador',
         categoria: '',
@@ -368,7 +374,7 @@ export default function App() {
       if (coincidenciaIdentidad.pinUsuario && coincidenciaIdentidad.pinUsuario.trim() === pinIntroducido) {
         const esDir = coincidenciaIdentidad.rol === 'Directiva';
         const perfilRecuperado = {
-          nombre: coincidenciaIdentidad.nombre || identificadorLoginInput.trim(),
+          nombre: coincidenciaIdentidad.nombre || idRaw,
           correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
           rol: coincidenciaIdentidad.rol || 'Jugador',
           categoria: coincidenciaIdentidad.categoria || '',
@@ -1013,7 +1019,6 @@ export default function App() {
                 style={{ width: '100%', padding: 11, borderRadius: 8, border: '1px solid var(--border)', fontSize: 15 }}
                 value={identificadorLoginInput}
                 onChange={(e) => setIdentificadorLoginInput(e.target.value)}
-                required
               />
               <input
                 type="password"
