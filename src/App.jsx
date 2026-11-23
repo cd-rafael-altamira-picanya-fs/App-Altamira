@@ -84,9 +84,19 @@ const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
 const REGEX_SOLO_JORNADA = /^jornada\s*\d+(\s*\([^)]*\))?$/i;
 
+function esNombreInvalidoOResidual(texto) {
+  const limpio = String(texto || '')
+    .replace(/["""'']/g, '')
+    .trim();
+  if (!limpio || limpio.length < 3) return true;
+  if (/^[ab]$/i.test(limpio)) return true;
+  return false;
+}
+
 function esTextoFechaOJornada(texto) {
   const t = String(texto || '').trim();
   if (!t) return true;
+  if (esNombreInvalidoOResidual(t)) return true;
   if (REGEX_DIA_FECHA_LARGA.test(t)) return true;
   if (REGEX_SOLO_JORNADA.test(t)) return true;
   if (/^\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?(\s+([01]?\d|2[0-3]):[0-5]\d)?$/.test(t)) return true;
@@ -156,7 +166,7 @@ function limpiarNombreRival(texto) {
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  if (esTextoFechaOJornada(limpio)) {
+  if (esNombreInvalidoOResidual(limpio) || esTextoFechaOJornada(limpio)) {
     return 'Rival por confirmar';
   }
 
@@ -213,7 +223,6 @@ function parsearPartidosDesdeTexto(textoCrudo) {
     const horaMatch = linea.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
     const hora = horaMatch ? horaMatch[0] : '';
 
-    // Caso 1: Enfrentamiento tipo "Equipo A - Equipo B" o "Equipo A – Equipo B"
     const partesGuion = linea.split(/\s+(?:-|–|—|vs\.?)\s+/i).map((s) => s.trim()).filter(Boolean);
     if (partesGuion.length >= 2) {
       const eqIzq = partesGuion[0];
@@ -226,6 +235,10 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       const izqEsAltamira = esEquipoClubAltamira(eqIzq);
       const derEsAltamira = esEquipoClubAltamira(eqDer);
 
+      if (!izqEsAltamira && !derEsAltamira) {
+        continue;
+      }
+
       const clubLocal = 'C.D. Rafael Altamira FS';
       let local = clubLocal;
       let visitante = 'Rival por confirmar';
@@ -233,16 +246,16 @@ function parsearPartidosDesdeTexto(textoCrudo) {
 
       if (izqEsAltamira && !derEsAltamira) {
         local = clubLocal;
-        visitante = esTextoFechaOJornada(eqDer) ? 'Rival por confirmar' : eqDer;
+        visitante = limpiarNombreRival(eqDer);
         esFuera = false;
       } else if (derEsAltamira && !izqEsAltamira) {
-        local = esTextoFechaOJornada(eqIzq) ? 'Rival por confirmar' : eqIzq;
+        local = limpiarNombreRival(eqIzq);
         visitante = clubLocal;
         esFuera = true;
       } else {
-        local = esTextoFechaOJornada(eqIzq) ? 'Rival por confirmar' : eqIzq;
-        visitante = esTextoFechaOJornada(eqDer) ? 'Rival por confirmar' : eqDer;
-        esFuera = esEquipoClubAltamira(visitante);
+        local = clubLocal;
+        visitante = 'Rival por confirmar';
+        esFuera = false;
       }
 
       const rivalParaPabellon = esFuera ? local : visitante;
@@ -264,7 +277,6 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       continue;
     }
 
-    // Caso 2: Líneas con separadores · o |
     const esFuera = /\bFUERA\b/i.test(linea);
     const segmentos = linea
       .split(/\s*(?:\||·| en )\s*/i)
@@ -1599,6 +1611,13 @@ export default function App() {
         continue;
       }
 
+      const esLocalAltamira = esEquipoClubAltamira(localCrudo);
+      const esVisitanteAltamira = esEquipoClubAltamira(visitanteCrudo);
+
+      if (!esLocalAltamira && !esVisitanteAltamira) {
+        continue;
+      }
+
       const fechaCandidata = String(cand.fecha || '').trim();
       const fechaDetectada =
         (fechaCandidata && !/^(próximamente|proximamente|por confirmar)$/i.test(fechaCandidata)
@@ -1607,9 +1626,6 @@ export default function App() {
         extraerFechaDeTexto(`${fechaCandidata} ${localCrudo} ${visitanteCrudo}`) ||
         fechaCandidata ||
         'Por confirmar';
-
-      const esLocalAltamira = esEquipoClubAltamira(localCrudo);
-      const esVisitanteAltamira = esEquipoClubAltamira(visitanteCrudo);
 
       let rivalLimpio = 'Rival por confirmar';
       if (esLocalAltamira && visitanteCrudo && !esVisitanteAltamira) {
@@ -1626,7 +1642,7 @@ export default function App() {
       const localFinal =
         esVisitanteAltamira && rivalLimpio !== 'Rival por confirmar'
           ? rivalLimpio
-          : localCrudo && !esTextoFechaOJornada(localCrudo)
+          : localCrudo && !esTextoFechaOJornada(localCrudo) && !esNombreInvalidoOResidual(localCrudo)
           ? limpiarNombreRival(localCrudo)
           : clubLocal;
 
@@ -1689,11 +1705,15 @@ export default function App() {
   const handleLimpiarPartidosSinRival = async () => {
     const partidosValidos = partidos.filter((p) => {
       const rival = p.local === 'C.D. Rafael Altamira FS' ? p.visitante : p.local;
-      return !esTextoFechaOJornada(rival) && !/^(próximamente|proximamente|por confirmar)$/i.test(String(rival || '').trim());
+      return (
+        !esNombreInvalidoOResidual(rival) &&
+        !esTextoFechaOJornada(rival) &&
+        !/^(próximamente|proximamente|por confirmar|rival por confirmar)$/i.test(String(rival || '').trim())
+      );
     });
     const eliminados = partidos.filter((p) => !partidosValidos.some((v) => v.id === p.id));
     if (eliminados.length === 0) {
-      alert('No hay partidos con fechas o jornadas puestas como rival.');
+      alert('No hay partidos con fechas, jornadas o nombres incompletos como rival.');
       return;
     }
     guardarPartidosLocal(partidosValidos);
@@ -1708,7 +1728,7 @@ export default function App() {
         }
       }
     }
-    alert(`Se eliminaron ${eliminados.length} partido(s) que tenían fecha o jornada en lugar de rival.`);
+    alert(`Se eliminaron ${eliminados.length} partido(s) con datos incompletos o de fecha/jornada como rival.`);
   };
 
   const handleAgregarUrlSincronizacion = () => {
@@ -1795,7 +1815,7 @@ export default function App() {
     e.preventDefault();
     const parseados = parsearPartidosDesdeTexto(textoImportarPartidos);
     if (parseados.length === 0) {
-      alert('No se encontraron líneas de partidos para importar.');
+      alert('No se encontraron partidos de C.D. Rafael Altamira en el texto pegado.');
       return;
     }
 
