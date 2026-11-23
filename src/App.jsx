@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import {
   collection,
@@ -37,7 +37,7 @@ import {
 
 const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
-const MAX_PERFILES_RESERVA_DIRECTIVA = 4;
+const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 
 const CATEGORIAS_CLUB = [
   'Senior',
@@ -48,6 +48,18 @@ const CATEGORIAS_CLUB = [
   'Benjamín',
   'Prebenjamín'
 ];
+
+const ROLES_ESPECIALES_DIRECTIVA = [
+  { value: 'Entrenador', label: 'Entrenador' },
+  { value: '2º Entrenador', label: '2º Entrenador' },
+  { value: 'Reserva Directiva 1', label: 'Reserva Directiva 1' },
+  { value: 'Reserva Directiva 2', label: 'Reserva Directiva 2' }
+];
+
+function esRolCuerpoTecnicoODirectiva(rol) {
+  const r = String(rol || '').toLowerCase();
+  return r.includes('entrenador') || r.includes('directiva') || r.includes('reserva');
+}
 
 function procesarFotoCircular(file, callback) {
   if (!file) return;
@@ -72,7 +84,7 @@ function procesarFotoCircular(file, callback) {
 }
 
 function crearIdPerfil(nombre, dorsal, correo = '') {
-  const claveBase = correo.trim() ? `${nombre}_${correo}_${dorsal}` : `${nombre}_${dorsal}`;
+  const claveBase = correo.trim() ? `${nombre}_${correo}_${dorsal || 'sin_dorsal'}` : `${nombre}_${dorsal || 'sin_dorsal'}`;
   const base = claveBase
     .toLowerCase()
     .normalize('NFD')
@@ -83,45 +95,54 @@ function crearIdPerfil(nombre, dorsal, correo = '') {
 }
 
 function AvatarCircular({ src, alt, letra, tamano = 48 }) {
+  const boxRef = useRef(null);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    const px = `${tamano}px`;
+    if (boxRef.current) {
+      boxRef.current.style.setProperty('width', px, 'important');
+      boxRef.current.style.setProperty('height', px, 'important');
+      boxRef.current.style.setProperty('min-width', px, 'important');
+      boxRef.current.style.setProperty('min-height', px, 'important');
+      boxRef.current.style.setProperty('max-width', px, 'important');
+      boxRef.current.style.setProperty('max-height', px, 'important');
+      boxRef.current.style.setProperty('border-radius', '9999px', 'important');
+      boxRef.current.style.setProperty('overflow', 'hidden', 'important');
+      boxRef.current.style.setProperty('position', 'relative', 'important');
+      boxRef.current.style.setProperty('display', 'flex', 'important');
+      boxRef.current.style.setProperty('align-items', 'center', 'important');
+      boxRef.current.style.setProperty('justify-content', 'center', 'important');
+      boxRef.current.style.setProperty('flex-shrink', '0', 'important');
+    }
+    if (imgRef.current) {
+      imgRef.current.style.setProperty('width', px, 'important');
+      imgRef.current.style.setProperty('height', px, 'important');
+      imgRef.current.style.setProperty('min-width', px, 'important');
+      imgRef.current.style.setProperty('min-height', px, 'important');
+      imgRef.current.style.setProperty('max-width', px, 'important');
+      imgRef.current.style.setProperty('max-height', px, 'important');
+      imgRef.current.style.setProperty('border-radius', '9999px', 'important');
+      imgRef.current.style.setProperty('object-fit', 'cover', 'important');
+      imgRef.current.style.setProperty('object-position', 'center', 'important');
+      imgRef.current.style.setProperty('position', 'static', 'important');
+      imgRef.current.style.setProperty('margin', '0', 'important');
+    }
+  }, [tamano, src]);
+
   return (
     <div
+      ref={boxRef}
       style={{
-        width: `${tamano}px`,
-        height: `${tamano}px`,
-        minWidth: `${tamano}px`,
-        minHeight: `${tamano}px`,
-        maxWidth: `${tamano}px`,
-        maxHeight: `${tamano}px`,
-        flexShrink: 0,
-        borderRadius: '9999px',
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         backgroundColor: '#1e3a8a',
         color: '#ffffff',
         fontWeight: 800,
         fontSize: `${Math.max(13, Math.round(tamano * 0.36))}px`,
-        border: '2px solid #cbd5e1',
-        position: 'relative'
+        border: '2px solid #cbd5e1'
       }}
     >
       {src ? (
-        <img
-          src={src}
-          alt={alt || 'Foto de perfil'}
-          style={{
-            width: `${tamano}px`,
-            height: `${tamano}px`,
-            minWidth: `${tamano}px`,
-            minHeight: `${tamano}px`,
-            maxWidth: `${tamano}px`,
-            maxHeight: `${tamano}px`,
-            objectFit: 'cover',
-            objectPosition: 'center',
-            display: 'block'
-          }}
-        />
+        <img ref={imgRef} src={src} alt={alt || 'Foto de perfil'} />
       ) : (
         <span>{letra || 'U'}</span>
       )}
@@ -213,6 +234,9 @@ const ENTRENOS = [
 
 function perfilJugadorCompleto(p) {
   if (!p) return false;
+  if (esRolCuerpoTecnicoODirectiva(p.rol)) {
+    return Boolean(p.nombre && p.nombre.trim().length >= 2 && p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
+  }
   const nombreOk = Boolean(p.nombre && p.nombre.trim().length >= 2);
   const dorsalOk = Boolean(p.dorsal && String(p.dorsal).trim().length > 0);
   const categoriaOk = Boolean(p.categoria && String(p.categoria).trim().length > 0);
@@ -290,10 +314,8 @@ export default function App() {
   const [formPinConfirm, setFormPinConfirm] = useState(perfil.pinUsuario || '');
 
   const [nuevoPerfilEspecial, setNuevoPerfilEspecial] = useState({
-    tipoSlot: 'Entrenador 1',
+    rolEspecial: 'Entrenador',
     nombre: '',
-    dorsal: '0',
-    categoria: '',
     pinUsuario: '',
     foto: ''
   });
@@ -303,6 +325,7 @@ export default function App() {
     Boolean(isAdmin) ||
     rolActual.includes('entrenador') ||
     rolActual.includes('directiva');
+  const sinDorsalUsuarioActual = esRolCuerpoTecnicoODirectiva(perfil?.rol);
 
   const [partidos, setPartidos] = useState(() => leerListaLocal('cdra_partidos_local', DEMO_PARTIDOS));
   const [clasificacion, setClasificacion] = useState(() => leerListaLocal('cdra_clasificacion_local', DEMO_CLASIFICACION));
@@ -341,7 +364,7 @@ export default function App() {
   };
 
   const sincronizarJugadorEnPlantilla = async (perfilDatos) => {
-    if ((perfilDatos.rol || 'Jugador') !== 'Jugador') return;
+    if (esRolCuerpoTecnicoODirectiva(perfilDatos.rol)) return;
     const idJugador = `reg_${crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '')}`;
     const jugadorDoc = {
       dorsal: String(perfilDatos.dorsal).trim(),
@@ -367,18 +390,21 @@ export default function App() {
   };
 
   const sincronizarPerfilEnClub = async (perfilDatos) => {
-    const idDoc = crearIdPerfil(perfilDatos.nombre, perfilDatos.dorsal, perfilDatos.correo || '');
+    const esEspecial = esRolCuerpoTecnicoODirectiva(perfilDatos.rol);
+    const dorsalLimpio = esEspecial ? '' : String(perfilDatos.dorsal || '').trim();
+    const categoriaLimpia = esEspecial ? (perfilDatos.rol || 'Entrenador') : (perfilDatos.categoria || '');
+    const idDoc = crearIdPerfil(perfilDatos.nombre, dorsalLimpio, perfilDatos.correo || '');
     const registroPublico = {
       id: idDoc,
       nombre: perfilDatos.nombre.trim(),
       correo: (perfilDatos.correo || '').trim().toLowerCase(),
       rol: perfilDatos.rol || 'Jugador',
-      categoria: perfilDatos.categoria || '',
-      dorsal: String(perfilDatos.dorsal).trim(),
+      categoria: categoriaLimpia,
+      dorsal: dorsalLimpio,
       foto: perfilDatos.foto || '',
       pinUsuario: perfilDatos.pinUsuario || '',
-      esReservaDirectiva: Boolean(perfilDatos.esReservaDirectiva),
-      tipoSlot: perfilDatos.tipoSlot || '',
+      esReservaDirectiva: Boolean(perfilDatos.esReservaDirectiva || esEspecial),
+      tipoSlot: perfilDatos.tipoSlot || (esEspecial ? perfilDatos.rol : ''),
       actualizadoEn: serverTimestamp()
     };
 
@@ -394,7 +420,9 @@ export default function App() {
       }
     }
 
-    await sincronizarJugadorEnPlantilla(perfilDatos);
+    if (!esEspecial) {
+      await sincronizarJugadorEnPlantilla({ ...perfilDatos, dorsal: dorsalLimpio, categoria: categoriaLimpia });
+    }
   };
 
   const handleIniciarSesion = (e) => {
@@ -413,8 +441,8 @@ export default function App() {
         nombre: idRaw || 'Directiva',
         correo: idIntroducido.includes('@') ? idIntroducido : '',
         rol: 'Directiva',
-        categoria: 'Club',
-        dorsal: '0',
+        categoria: 'Directiva',
+        dorsal: '',
         foto: perfil.foto || '',
         pinUsuario: pinIntroducido,
         esReservaDirectiva: false
@@ -479,15 +507,16 @@ export default function App() {
     if (coincidenciaIdentidad) {
       if (coincidenciaIdentidad.pinUsuario && coincidenciaIdentidad.pinUsuario.trim() === pinIntroducido) {
         const esDir = coincidenciaIdentidad.rol === 'Directiva';
+        const esEspecial = esRolCuerpoTecnicoODirectiva(coincidenciaIdentidad.rol);
         const perfilRecuperado = {
           nombre: coincidenciaIdentidad.nombre || idRaw,
           correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
           rol: coincidenciaIdentidad.rol || 'Jugador',
-          categoria: coincidenciaIdentidad.categoria || '',
-          dorsal: coincidenciaIdentidad.dorsal || '',
+          categoria: esEspecial ? (coincidenciaIdentidad.rol || 'Entrenador') : (coincidenciaIdentidad.categoria || ''),
+          dorsal: esEspecial ? '' : (coincidenciaIdentidad.dorsal || ''),
           foto: coincidenciaIdentidad.foto || '',
           pinUsuario: coincidenciaIdentidad.pinUsuario,
-          esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva),
+          esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva || esEspecial),
           tipoSlot: coincidenciaIdentidad.tipoSlot || ''
         };
         setPerfil(perfilRecuperado);
@@ -520,23 +549,24 @@ export default function App() {
     e.preventDefault();
     const nombreLimpio = formNombre.trim();
     const correoLimpio = formCorreo.trim().toLowerCase();
-    const dorsalLimpio = String(formDorsal).trim();
-    const categoriaLimpia = String(formCategoria).trim();
+    const esEspecial = esRolCuerpoTecnicoODirectiva(formRol);
+    const dorsalLimpio = esEspecial ? '' : String(formDorsal).trim();
+    const categoriaLimpia = esEspecial ? (formRol || 'Entrenador') : String(formCategoria).trim();
     const pinLimpio = formPinNuevo.trim();
 
     if (nombreLimpio.length < 2) {
       alert('El campo Nombre / Seudónimo * es obligatorio.');
       return;
     }
-    if (!dorsalLimpio) {
+    if (!esEspecial && !dorsalLimpio) {
       alert('El campo Dorsal * es obligatorio.');
       return;
     }
-    if (!categoriaLimpia) {
+    if (!esEspecial && !categoriaLimpia) {
       alert('El campo Categoría * es obligatorio.');
       return;
     }
-    if (!formFoto) {
+    if (!esEspecial && !formFoto) {
       alert('El campo Foto * es obligatorio.');
       return;
     }
@@ -557,7 +587,7 @@ export default function App() {
       dorsal: dorsalLimpio,
       foto: formFoto,
       pinUsuario: pinLimpio,
-      esReservaDirectiva: false
+      esReservaDirectiva: esEspecial
     };
 
     setPerfil(perfilActualizado);
@@ -567,23 +597,23 @@ export default function App() {
     setModoRegistroJugador(false);
     setSesionIniciada(true);
     await sincronizarPerfilEnClub(perfilActualizado);
-    alert('¡Registro completado! Tu perfil ya aparece en Perfiles y en Plantilla.');
+    alert('¡Perfil guardado correctamente!');
   };
 
   const handleCrearPerfilEspecialDirectiva = async (e) => {
     e.preventDefault();
-    const perfilesEspecialesActuales = perfilesClub.filter((p) => p.esReservaDirectiva);
-    if (perfilesEspecialesActuales.length >= MAX_PERFILES_RESERVA_DIRECTIVA) {
-      alert('Ya has creado el máximo de 4 perfiles especiales (2 entrenadores + 2 reserva). Borra uno si quieres crear otro.');
+    const perfilesEspecialesActuales = perfilesClub.filter((p) => p.esReservaDirectiva || esRolCuerpoTecnicoODirectiva(p.rol));
+    if (perfilesEspecialesActuales.length >= MAX_PERFILES_ESPECIALES_DIRECTIVA) {
+      alert('Ya has creado el máximo de 4 perfiles especiales. Borra uno si quieres crear otro.');
       return;
     }
 
     const nombreLimpio = nuevoPerfilEspecial.nombre.trim();
     const pinLimpio = nuevoPerfilEspecial.pinUsuario.trim();
-    const dorsalLimpio = String(nuevoPerfilEspecial.dorsal || '0').trim();
+    const rolElegido = nuevoPerfilEspecial.rolEspecial || 'Entrenador';
 
     if (nombreLimpio.length < 2) {
-      alert('Escribe el nombre o seudónimo del perfil especial.');
+      alert('Escribe el nombre o seudónimo del perfil.');
       return;
     }
     if (pinLimpio.length < 4) {
@@ -591,22 +621,18 @@ export default function App() {
       return;
     }
 
-    const rolAsignado = nuevoPerfilEspecial.tipoSlot.startsWith('Entrenador')
-      ? 'Entrenador'
-      : 'Reserva Directiva';
-
-    const idDoc = crearIdPerfil(nombreLimpio, dorsalLimpio, nuevoPerfilEspecial.tipoSlot);
+    const idDoc = crearIdPerfil(nombreLimpio, rolElegido, 'especial');
     const registroEspecial = {
       id: idDoc,
       nombre: nombreLimpio,
       correo: '',
-      rol: rolAsignado,
-      categoria: nuevoPerfilEspecial.categoria || 'Senior',
-      dorsal: dorsalLimpio,
-      foto: nuevoPerfilEspecial.foto || perfil.foto || '',
+      rol: rolElegido,
+      categoria: rolElegido,
+      dorsal: '',
+      foto: nuevoPerfilEspecial.foto || '',
       pinUsuario: pinLimpio,
       esReservaDirectiva: true,
-      tipoSlot: nuevoPerfilEspecial.tipoSlot,
+      tipoSlot: rolElegido,
       actualizadoEn: serverTimestamp()
     };
 
@@ -621,14 +647,12 @@ export default function App() {
     }
 
     setNuevoPerfilEspecial({
-      tipoSlot: 'Entrenador 2',
+      rolEspecial: '2º Entrenador',
       nombre: '',
-      dorsal: '0',
-      categoria: '',
       pinUsuario: '',
       foto: ''
     });
-    alert(`Perfil especial (${nuevoPerfilEspecial.tipoSlot}) creado correctamente.`);
+    alert(`Perfil de ${rolElegido} creado correctamente sin dorsal.`);
   };
 
   const handleCerrarSesion = () => {
@@ -866,7 +890,7 @@ export default function App() {
     const hora = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const msgObj = {
       autor: perfil.nombre || 'Usuario',
-      rol: `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`,
+      rol: `${perfil.rol} · ${perfil.categoria || perfil.rol}`,
       canal: canalChat,
       texto: textoChat.trim(),
       hora,
@@ -1037,25 +1061,27 @@ export default function App() {
   const listaPerfilesVisibles = (() => {
     const mapa = new Map();
     perfilesClub.forEach((p) => {
-      if (p.nombre || p.dorsal || p.foto) {
+      if (p.nombre || p.dorsal || p.foto || p.rol) {
         mapa.set(p.id, p);
       }
     });
-    if (perfil.nombre || perfil.dorsal || perfil.foto) {
+    if (perfil.nombre || perfil.dorsal || perfil.foto || perfil.rol) {
       mapa.set(miIdPerfil, {
         id: miIdPerfil,
         nombre: perfil.nombre || 'Sin nombre',
         correo: perfil.correo || '',
         rol: perfil.rol || 'Jugador',
-        categoria: perfil.categoria || 'Sin categoría',
-        dorsal: String(perfil.dorsal || '0'),
+        categoria: esRolCuerpoTecnicoODirectiva(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
+        dorsal: esRolCuerpoTecnicoODirectiva(perfil.rol) ? '' : String(perfil.dorsal || ''),
         foto: perfil.foto || ''
       });
     }
     return Array.from(mapa.values());
   })();
 
-  const perfilesEspecialesCreados = perfilesClub.filter((p) => p.esReservaDirectiva);
+  const perfilesEspecialesCreados = perfilesClub.filter(
+    (p) => p.esReservaDirectiva || esRolCuerpoTecnicoODirectiva(p.rol)
+  );
 
   if (!sesionIniciada) {
     return (
@@ -1130,14 +1156,16 @@ export default function App() {
                 Todos los campos marcados con * son obligatorios.
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
                 <AvatarCircular
                   src={formFoto}
                   alt="Vista previa"
                   letra={formNombre?.[0] || 'J'}
-                  tamano={80}
+                  tamano={76}
                 />
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>#{formDorsal || '0'}</span>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Dorsal: #{formDorsal || '-'}
+                </div>
                 <label className="btn-primary" style={{ cursor: 'pointer' }}>
                   <Camera size={15} /> Subir foto *
                   <input
@@ -1226,7 +1254,8 @@ export default function App() {
     );
   }
 
-  if (forzarOnboarding || (perfil.rol === 'Jugador' && !perfilJugadorCompleto(perfil))) {
+  if (forzarOnboarding || (!sinDorsalUsuarioActual && !perfilJugadorCompleto(perfil))) {
+    const editandoEspecial = esRolCuerpoTecnicoODirectiva(formRol);
     return (
       <div>
         <header className="header">
@@ -1243,7 +1272,7 @@ export default function App() {
             )}
             <div>
               <h1>C.D. Rafael Altamira</h1>
-              <p>Configuración obligatoria del jugador</p>
+              <p>{editandoEspecial ? `Perfil de ${formRol}` : 'Configuración obligatoria del jugador'}</p>
             </div>
           </div>
           <button type="button" className="admin-btn" onClick={handleCerrarSesion}>
@@ -1254,22 +1283,23 @@ export default function App() {
         <main className="container">
           <form className="card" onSubmit={handleGuardarConfiguracionObligatoria} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
             <div className="section-title">
-              <KeyRound size={19} /> Completa tu Perfil de Jugador
+              <KeyRound size={19} /> {editandoEspecial ? `Editar Perfil (${formRol})` : 'Completa tu Perfil de Jugador'}
             </div>
-            <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 700 }}>
-              Campos obligatorios marcados con *: Nombre/Seudónimo *, Dorsal *, Categoría *, Foto * y Contraseña/PIN *.
-            </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
               <AvatarCircular
                 src={formFoto}
                 alt="Vista previa"
-                letra={formNombre?.[0] || 'J'}
-                tamano={80}
+                letra={formNombre?.[0] || 'U'}
+                tamano={76}
               />
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>#{formDorsal || '0'}</span>
+              {!editandoEspecial && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Dorsal: #{formDorsal || '-'}
+                </div>
+              )}
               <label className="btn-primary" style={{ cursor: 'pointer' }}>
-                <Camera size={15} /> Subir foto *
+                <Camera size={15} /> {editandoEspecial ? 'Subir foto' : 'Subir foto *'}
                 <input
                   type="file"
                   accept="image/*"
@@ -1290,31 +1320,35 @@ export default function App() {
               />
             </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Número de dorsal *</label>
-              <input
-                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
-                placeholder="Ej. 10 *"
-                value={formDorsal}
-                onChange={(e) => setFormDorsal(e.target.value)}
-                required
-              />
-            </div>
+            {!editandoEspecial && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Número de dorsal *</label>
+                  <input
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    placeholder="Ej. 10 *"
+                    value={formDorsal}
+                    onChange={(e) => setFormDorsal(e.target.value)}
+                    required
+                  />
+                </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
-              <select
-                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
-                value={formCategoria}
-                onChange={(e) => setFormCategoria(e.target.value)}
-                required
-              >
-                <option value="">Selecciona tu categoría *</option>
-                {CATEGORIAS_CLUB.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+                  <select
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    value={formCategoria}
+                    onChange={(e) => setFormCategoria(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecciona tu categoría *</option>
+                    {CATEGORIAS_CLUB.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Contraseña / PIN personal (mín. 4, distinto de 1234) *</label>
@@ -1363,7 +1397,10 @@ export default function App() {
           )}
           <div>
             <h1>C.D. Rafael Altamira</h1>
-            <p>{perfil.nombre} · #{perfil.dorsal || '0'}</p>
+            <p>
+              {perfil.nombre}
+              {!sinDorsalUsuarioActual && perfil.dorsal ? ` · #${perfil.dorsal}` : ` · ${perfil.rol}`}
+            </p>
           </div>
         </div>
         <div className="header-actions">
@@ -1515,7 +1552,9 @@ export default function App() {
                     <div className="player-info">
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                         <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal || (idx + 1)}</span>
+                        {j.dorsal && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                        )}
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15 }}>
@@ -1610,7 +1649,9 @@ export default function App() {
                 <div className="player-info">
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal || '0'}</span>
+                    {j.dorsal && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                    )}
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
@@ -1796,7 +1837,7 @@ export default function App() {
                     flexDirection: 'column',
                     alignItems: 'center',
                     textAlign: 'center',
-                    gap: 8,
+                    gap: 10,
                     padding: 20
                   }}
                 >
@@ -1804,16 +1845,20 @@ export default function App() {
                     src={perfil.foto}
                     alt={perfil.nombre}
                     letra={perfil.nombre?.[0] || 'U'}
-                    tamano={80}
+                    tamano={76}
                   />
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
-                    #{perfil.dorsal || '0'}
-                  </div>
+                  {!sinDorsalUsuarioActual && perfil.dorsal && (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>
+                      #{perfil.dorsal}
+                    </div>
+                  )}
                   <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a' }}>
                     {perfil.nombre}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
-                    {perfil.rol} · {perfil.categoria || 'Sin categoría'}
+                    {sinDorsalUsuarioActual
+                      ? (perfil.categoria || perfil.rol)
+                      : `${perfil.rol} · ${perfil.categoria || 'Sin categoría'}`}
                   </div>
                   <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
                     Editar foto, nombre, dorsal o contraseña
@@ -1823,20 +1868,19 @@ export default function App() {
                 {isAdmin && (
                   <form className="card" onSubmit={handleCrearPerfilEspecialDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div className="section-title" style={{ fontSize: 15 }}>
-                      <UserPlus size={17} /> Perfiles Especiales Directiva ({perfilesEspecialesCreados.length}/{MAX_PERFILES_RESERVA_DIRECTIVA})
+                      <UserPlus size={17} /> Entrenador, 2º Entrenador y Reserva ({perfilesEspecialesCreados.length}/{MAX_PERFILES_ESPECIALES_DIRECTIVA})
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      Crea hasta 4 perfiles (2 entrenadores y 2 de reserva) con acceso propio.
+                      No llevan dorsal; su categoría/rol es Entrenador o 2º Entrenador.
                     </p>
                     <select
                       style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
-                      value={nuevoPerfilEspecial.tipoSlot}
-                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, tipoSlot: e.target.value })}
+                      value={nuevoPerfilEspecial.rolEspecial}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, rolEspecial: e.target.value })}
                     >
-                      <option value="Entrenador 1">Entrenador 1</option>
-                      <option value="Entrenador 2">Entrenador 2</option>
-                      <option value="Reserva 1">Reserva Directiva 1</option>
-                      <option value="Reserva 2">Reserva Directiva 2</option>
+                      {ROLES_ESPECIALES_DIRECTIVA.map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
                     </select>
                     <input
                       placeholder="Nombre o seudónimo *"
@@ -1846,12 +1890,6 @@ export default function App() {
                       required
                     />
                     <input
-                      placeholder="Dorsal o número (ej. 0)"
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
-                      value={nuevoPerfilEspecial.dorsal}
-                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, dorsal: e.target.value })}
-                    />
-                    <input
                       type="password"
                       placeholder="Contraseña o PIN (mín. 4 caracteres) *"
                       style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
@@ -1859,7 +1897,28 @@ export default function App() {
                       onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, pinUsuario: e.target.value })}
                       required
                     />
-                    <button type="submit" className="btn-primary">Crear Perfil Especial</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <AvatarCircular
+                        src={nuevoPerfilEspecial.foto}
+                        alt="Foto perfil especial"
+                        letra={nuevoPerfilEspecial.nombre?.[0] || 'E'}
+                        tamano={48}
+                      />
+                      <label className="btn-rsvp" style={{ cursor: 'pointer' }}>
+                        <Camera size={14} /> Foto (opcional)
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) =>
+                            procesarFotoCircular(e.target.files[0], (dataUrl) =>
+                              setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, foto: dataUrl })
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                    <button type="submit" className="btn-primary">Crear Perfil sin Dorsal</button>
                   </form>
                 )}
 
@@ -1908,29 +1967,36 @@ export default function App() {
                     Aún no hay perfiles completados en el club.
                   </div>
                 ) : (
-                  listaPerfilesVisibles.map((item) => (
-                    <div key={item.id} className="card player-row">
-                      <div className="player-info">
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                          <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{item.dorsal || '0'}</span>
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>
-                            {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
+                  listaPerfilesVisibles.map((item) => {
+                    const esEspecialItem = esRolCuerpoTecnicoODirectiva(item.rol);
+                    return (
+                      <div key={item.id} className="card player-row">
+                        <div className="player-info">
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
+                            {!esEspecialItem && item.dorsal && (
+                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{item.dorsal}</span>
+                            )}
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                            {item.tipoSlot ? `${item.tipoSlot} · ` : ''}{item.rol} · {item.categoria}
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 15 }}>
+                              {item.nombre} {item.id === miIdPerfil ? '(Tú)' : ''}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                              {esEspecialItem
+                                ? (item.categoria || item.rol)
+                                : `${item.rol} · ${item.categoria || 'Sin categoría'}`}
+                            </div>
                           </div>
                         </div>
+                        {isAdmin && (
+                          <button className="btn-danger" onClick={() => handleDelete('perfiles', item.id)}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
-                      {isAdmin && (
-                        <button className="btn-danger" onClick={() => handleDelete('perfiles', item.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
