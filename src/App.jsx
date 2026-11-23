@@ -89,20 +89,30 @@ const REGEX_SOLO_JORNADA = /^jornada\s*\d+(\s*\([^)]*\))?$/i;
 
 function obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTexto = '') {
   const limpio = String(pabellonTexto || '').trim();
+  const rivalLimpio = String(rivalTexto || '').trim();
+
+  if (!limpio || /pabell[oó]n municipal picanya/i.test(limpio)) {
+    const destinoCasa = 'Pabellón Municipal de Picanya, Picanya, Valencia';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinoCasa)}`;
+  }
+
+  const matchVisitante = limpio.match(/^Pabell[oó]n visitante\s*\((.+)\)$/i);
   let consulta = limpio;
 
-  if (!consulta || /pabell[oó]n municipal picanya/i.test(consulta)) {
-    consulta = 'Pabellón Municipal Picanya, Valencia';
-  } else {
-    const matchVisitante = consulta.match(/^Pabell[oó]n visitante\s*\((.+)\)$/i);
-    if (matchVisitante) {
-      const rival = matchVisitante[1].trim();
-      if (/rival por confirmar/i.test(rival) && rivalTexto && !/rival por confirmar/i.test(rivalTexto)) {
-        consulta = `Pabellón ${rivalTexto.trim()}, Valencia`;
-      } else {
-        consulta = `Pabellón ${rival}, Valencia`;
-      }
-    }
+  if (matchVisitante) {
+    const dentroParentesis = matchVisitante[1].trim();
+    const nombreObjetivo =
+      /rival por confirmar/i.test(dentroParentesis) &&
+      rivalLimpio &&
+      !/rival por confirmar/i.test(rivalLimpio)
+        ? rivalLimpio
+        : dentroParentesis;
+
+    consulta = /pabell[oó]n|polideportivo|campo|pista/i.test(nombreObjetivo)
+      ? `${nombreObjetivo}, Valencia`
+      : `Pabellón ${nombreObjetivo}, Valencia`;
+  } else if (!/valencia/i.test(consulta)) {
+    consulta = `${consulta}, Valencia`;
   }
 
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(consulta)}`;
