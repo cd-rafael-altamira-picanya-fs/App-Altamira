@@ -331,13 +331,43 @@ function obtenerMarcaTiempoPartido(partido) {
   return Number.MAX_SAFE_INTEGER;
 }
 
-function ordenarPartidosCronologicamente(lista) {
-  return [...(lista || [])].sort((a, b) => {
+function esPartidoYaJugado(partido, ahoraMs = Date.now()) {
+  const res = String(partido?.resultado || 'VS').trim().toUpperCase();
+  if (res && res !== 'VS') return true;
+  const ts = obtenerMarcaTiempoPartido(partido);
+  if (ts === Number.MAX_SAFE_INTEGER) return false;
+  // Consideramos jugado unas 2 horas después del inicio o si su fecha ya pasó
+  return ts < ahoraMs - 2 * 60 * 60 * 1000;
+}
+
+function separarPartidosProximosYJugados(lista) {
+  const ahoraMs = Date.now();
+  const proximos = [];
+  const jugados = [];
+
+  for (const p of lista || []) {
+    if (esPartidoYaJugado(p, ahoraMs)) {
+      jugados.push(p);
+    } else {
+      proximos.push(p);
+    }
+  }
+
+  proximos.sort((a, b) => {
     const tA = obtenerMarcaTiempoPartido(a);
     const tB = obtenerMarcaTiempoPartido(b);
     if (tA !== tB) return tA - tB;
     return String(a?.categoria || '').localeCompare(String(b?.categoria || ''), 'es');
   });
+
+  jugados.sort((a, b) => {
+    const tA = obtenerMarcaTiempoPartido(a);
+    const tB = obtenerMarcaTiempoPartido(b);
+    if (tA !== tB) return tB - tA;
+    return String(a?.categoria || '').localeCompare(String(b?.categoria || ''), 'es');
+  });
+
+  return { proximos, jugados };
 }
 
 function TextoConSignoGenero({ texto }) {
@@ -728,6 +758,7 @@ export default function App() {
   const [avisosSubtab, setAvisosSubtab] = useState('avisos');
   const [perfilSubtab, setPerfilSubtab] = useState('mi-perfil');
   const [generoPerfilesTab, setGeneroPerfilesTab] = useState('masculina');
+  const [mostrarJugados, setMostrarJugados] = useState(true);
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('cdra_admin_activa') === '1');
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -1726,7 +1757,7 @@ export default function App() {
     }
   };
 
-  const partidosOrdenados = ordenarPartidosCronologicamente(partidos);
+  const { proximos: partidosProximos, jugados: partidosJugados } = separarPartidosProximosYJugados(partidos);
   const goleadoresOrdenados = [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0));
   const mensajesFiltrados = mensajes.filter((m) => (m.canal || 'General') === canalChat);
 
@@ -1792,6 +1823,56 @@ export default function App() {
     generoPerfilesTab === 'femenina'
       ? usuariosFemeninosOrdenados
       : usuariosMasculinosOrdenados;
+
+  const renderTarjetaPartido = (p, yaJugado = false) => {
+    const asistentes = p.asistentes || [];
+    const voy = asistentes.includes(perfil.nombre);
+    return (
+      <div
+        key={p.id}
+        className="card"
+        style={yaJugado ? { opacity: 0.85 } : undefined}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className={`tag ${p.resultado !== 'VS' ? 'result' : ''}`}>
+              <TextoConSignoGenero texto={p.categoria} />
+            </span>
+            {yaJugado && (
+              <span className="tag" style={{ background: '#e2e8f0', color: '#475569' }}>
+                Finalizado
+              </span>
+            )}
+          </div>
+          {isAdmin && (
+            <button className="btn-danger" onClick={() => handleDelete('partidos', p.id)}>
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+        <div className="match-teams">
+          <span style={{ flex: 1 }}>{p.local}</span>
+          <span className="match-score">{p.resultado || 'VS'}</span>
+          <span style={{ flex: 1, textAlign: 'right' }}>{p.visitante}</span>
+        </div>
+        <div className="match-meta">
+          <span><Clock size={13} /> {p.fecha || 'Por confirmar'}</span>
+          <span><MapPin size={13} /> {p.pabellon || 'Picanya'}</span>
+        </div>
+        <div className="rsvp-bar">
+          <span>Convocados: <strong>{asistentes.length}</strong></span>
+          <div className="rsvp-btns">
+            <button
+              className={`btn-rsvp ${voy ? 'yes' : ''}`}
+              onClick={() => toggleAsistencia(p)}
+            >
+              {voy ? '✓ Voy al partido' : 'Confirmar asistencia'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderFilaPerfil = (item) => {
     const esEspecialItem = esRolSinDorsal(item.rol);
@@ -2282,44 +2363,50 @@ export default function App() {
               </form>
             )}
 
-            {partidosOrdenados.map((p) => {
-              const asistentes = p.asistentes || [];
-              const voy = asistentes.includes(perfil.nombre);
-              return (
-                <div key={p.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className={`tag ${p.resultado !== 'VS' ? 'result' : ''}`}>
-                      <TextoConSignoGenero texto={p.categoria} />
-                    </span>
-                    {isAdmin && (
-                      <button className="btn-danger" onClick={() => handleDelete('partidos', p.id)}>
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--primary)', margin: '8px 0 8px' }}>
+              Próximos partidos ({partidosProximos.length})
+            </div>
+
+            {partidosProximos.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                No hay próximos partidos programados por ahora.
+              </div>
+            ) : (
+              partidosProximos.map((p) => renderTarjetaPartido(p, false))
+            )}
+
+            <div style={{ marginTop: 18 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 8,
+                  paddingTop: 10,
+                  borderTop: '2px dashed var(--border)'
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--muted)' }}>
+                  Partidos ya jugados ({partidosJugados.length})
+                </span>
+                <button
+                  type="button"
+                  className="btn-rsvp"
+                  onClick={() => setMostrarJugados(!mostrarJugados)}
+                >
+                  {mostrarJugados ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
+
+              {mostrarJugados &&
+                (partidosJugados.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Aún no hay partidos jugados registrados.
                   </div>
-                  <div className="match-teams">
-                    <span style={{ flex: 1 }}>{p.local}</span>
-                    <span className="match-score">{p.resultado || 'VS'}</span>
-                    <span style={{ flex: 1, textAlign: 'right' }}>{p.visitante}</span>
-                  </div>
-                  <div className="match-meta">
-                    <span><Clock size={13} /> {p.fecha || 'Por confirmar'}</span>
-                    <span><MapPin size={13} /> {p.pabellon || 'Picanya'}</span>
-                  </div>
-                  <div className="rsvp-bar">
-                    <span>Convocados: <strong>{asistentes.length}</strong></span>
-                    <div className="rsvp-btns">
-                      <button
-                        className={`btn-rsvp ${voy ? 'yes' : ''}`}
-                        onClick={() => toggleAsistencia(p)}
-                      >
-                        {voy ? '✓ Voy al partido' : 'Confirmar asistencia'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                ) : (
+                  partidosJugados.map((p) => renderTarjetaPartido(p, true))
+                ))}
+            </div>
           </div>
         )}
 
