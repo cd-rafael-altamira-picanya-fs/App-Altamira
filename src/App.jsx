@@ -55,6 +55,10 @@ const CATEGORIAS_CLUB = CATEGORIAS_BASE.flatMap((cat) => [
   `${cat} ♀`
 ]);
 
+const URLS_POR_DEFECTO = [
+  'https://www.elbalondelacomunitat.es/equipo/905540140/partidos'
+];
+
 const TEXTO_MUESTRA_FUTBUTEO = `VIERNES 27 NOV
 18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA
 19:15 · ALEVÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA
@@ -110,7 +114,6 @@ function parsearPartidosDesdeTexto(textoCrudo) {
     const horaMatch = linea.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
     const hora = horaMatch ? horaMatch[0] : '';
 
-    const esCasa = /\bCASA\b/i.test(linea);
     const esFuera = /\bFUERA\b/i.test(linea);
 
     const segmentos = linea
@@ -118,7 +121,6 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    let rival = '';
     const candidatoRival = segmentos.find((seg) => {
       const sLow = seg.toLowerCase();
       if (/^([01]?\d|2[0-3]):[0-5]\d$/.test(seg)) return false;
@@ -141,8 +143,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       return seg.length >= 2;
     });
 
-    rival = candidatoRival || 'Rival por confirmar';
-
+    const rival = candidatoRival || 'Rival por confirmar';
     const clubLocal = 'C.D. Rafael Altamira FS';
     const local = esFuera ? rival : clubLocal;
     const visitante = esFuera ? clubLocal : rival;
@@ -163,6 +164,21 @@ function parsearPartidosDesdeTexto(textoCrudo) {
   }
 
   return resultados;
+}
+
+function normalizarClavePartido(partido) {
+  const norm = (v) =>
+    String(v || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+
+  const cat = norm(partido.categoria);
+  const fecha = norm(partido.fecha);
+  const equiposOrdenados = [norm(partido.local), norm(partido.visitante)].sort().join('__');
+  return `${cat}|${fecha}|${equiposOrdenados}`;
 }
 
 function TextoConSignoGenero({ texto }) {
@@ -558,6 +574,11 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [showImportBox, setShowImportBox] = useState(false);
   const [textoImportarPartidos, setTextoImportarPartidos] = useState('');
+  const [urlsSincronizacion, setUrlsSincronizacion] = useState(() =>
+    leerListaLocal('cdra_urls_partidos', URLS_POR_DEFECTO)
+  );
+  const [nuevaUrlInput, setNuevaUrlInput] = useState('');
+  const [sincronizandoUrls, setSincronizandoUrls] = useState(false);
   const [escudoCargado, setEscudoCargado] = useState(true);
 
   const [pinDirectiva, setPinDirectiva] = useState(() => {
@@ -1259,6 +1280,106 @@ export default function App() {
     }
   };
 
+  const registrarPartidosSinDuplicar = async (candidatos) => {
+    const clavesVistas = new Set(partidos.map((p) => normalizarClavePartido(p)));
+    const unicos = [];
+
+    for (const cand of candidatos) {
+      const clave = normalizarClavePartido(cand);
+      if (!clave || clavesVistas.has(clave)) continue;
+      clavesVistas.add(clave);
+      unicos.push({
+        categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
+        local: cand.local || 'C.D. Rafael Altamira FS',
+        visitante: cand.visitante || 'Rival por confirmar',
+        fecha: cand.fecha || 'Por confirmar',
+        pabellon: cand.pabellon || 'Pabellón Municipal Picanya',
+        resultado: cand.resultado || 'VS'
+      });
+    }
+
+    if (unicos.length === 0) return 0;
+
+    const nuevosConId = unicos.map((item, idx) => ({
+      id: `sync_${Date.now()}_${idx}`,
+      ...item,
+      asistentes: [],
+      createdAt: serverTimestamp()
+    }));
+
+    const listaActualizada = [...nuevosConId, ...partidos];
+    guardarPartidosLocal(listaActualizada);
+
+    if (firebaseOk) {
+      for (let i = 0; i < unicos.length; i++) {
+        const payload = { ...unicos[i], asistentes: [], createdAt: serverTimestamp() };
+        try {
+          const ref = await addDoc(collection(db, 'partidos'), payload);
+          const idTemp = nuevosConId[i].id;
+          guardarPartidosLocal((prev) => prev.map((p) => (p.id === idTemp ? { ...p, id: ref.id } : p)));
+        } catch {
+          // Mantiene respaldo local si falla la red
+        }
+      }
+    }
+
+    return unicos.length;
+  };
+
+  const handleAgregarUrlSincronizacion = () => {
+    const limpia = nuevaUrlInput.trim();
+    if (!limpia) return;
+    if (!urlsSincronizacion.includes(limpia)) {
+      const actualizada = [...urlsSincronizacion, limpia];
+      setUrlsSincronizacion(actualizada);
+      localStorage.setItem('cdra_urls_partidos', JSON.stringify(actualizada));
+    }
+    setNuevaUrlInput('');
+  };
+
+  const handleQuitarUrlSincronizacion = (urlABorrar) => {
+    const actualizada = urlsSincronizacion.filter((u) => u !== urlABorrar);
+    setUrlsSincronizacion(actualizada);
+    localStorage.setItem('cdra_urls_partidos', JSON.stringify(actualizada));
+  };
+
+  const handleSincronizarUrls = async () => {
+    if (urlsSincronizacion.length === 0) {
+      alert('Añade al menos una URL primero.');
+      return;
+    }
+    setSincronizandoUrls(true);
+    try {
+      const resp = await fetch('/api/sincronizar-partidos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: urlsSincronizacion })
+      });
+      const data = await resp.json();
+
+      if (!resp.ok || !data.ok) {
+        alert(data.error || 'No se pudo completar la sincronización automática.');
+        return;
+      }
+
+      const añadidos = await registrarPartidosSinDuplicar(data.partidos || []);
+      const avisoBloqueos =
+        data.errores && data.errores.length > 0
+          ? `\nNota: algunas webs restringieron la lectura directa (${data.errores.map((e) => e.motivo).join(', ')}). Usa "Pegar texto" para esas.`
+          : '';
+
+      alert(
+        añadidos > 0
+          ? `¡Listo! Se añadieron ${añadidos} partido(s) nuevo(s) sin duplicados.${avisoBloqueos}`
+          : `Todo al día: no había partidos nuevos que añadir (0 duplicados).${avisoBloqueos}`
+      );
+    } catch {
+      alert('No se pudo conectar con /api/sincronizar-partidos. Usa el cuadro de "Pegar texto" si estás probando en local.');
+    } finally {
+      setSincronizandoUrls(false);
+    }
+  };
+
   const handleAddPartido = async (e) => {
     e.preventDefault();
     if (!nuevoPartido.visitante) return;
@@ -1293,52 +1414,15 @@ export default function App() {
       return;
     }
 
-    const existentes = new Set(
-      partidos.map((p) =>
-        `${normalizarCategoria(p.categoria)}|${String(p.local || '').toLowerCase()}|${String(p.visitante || '').toLowerCase()}|${String(p.fecha || '').toLowerCase()}`
-      )
-    );
-
-    const nuevosUnicos = parseados.filter((item) => {
-      const clave = `${normalizarCategoria(item.categoria)}|${item.local.toLowerCase()}|${item.visitante.toLowerCase()}|${item.fecha.toLowerCase()}`;
-      if (existentes.has(clave)) return false;
-      existentes.add(clave);
-      return true;
-    });
-
-    if (nuevosUnicos.length === 0) {
-      alert('Esos partidos ya estaban registrados en la app.');
+    const añadidos = await registrarPartidosSinDuplicar(parseados);
+    if (añadidos === 0) {
+      alert('Esos partidos ya estaban registrados en la app (0 duplicados).');
       return;
     }
 
-    const creadosConId = nuevosUnicos.map((item, i) => ({
-      id: `imp_${Date.now()}_${i}`,
-      ...item,
-      asistentes: [],
-      createdAt: serverTimestamp()
-    }));
-
-    const actualizada = [...creadosConId, ...partidos];
-    guardarPartidosLocal(actualizada);
     setTextoImportarPartidos('');
     setShowImportBox(false);
-
-    if (firebaseOk) {
-      for (let i = 0; i < nuevosUnicos.length; i++) {
-        const docItem = { ...nuevosUnicos[i], asistentes: [], createdAt: serverTimestamp() };
-        try {
-          const ref = await addDoc(collection(db, 'partidos'), docItem);
-          const idTemp = creadosConId[i].id;
-          guardarPartidosLocal((prev) =>
-            prev.map((p) => (p.id === idTemp ? { ...p, id: ref.id } : p))
-          );
-        } catch {
-          // Mantiene respaldo local
-        }
-      }
-    }
-
-    alert(`¡Se importaron ${nuevosUnicos.length} partido(s) correctamente!`);
+    alert(`¡Se importaron ${añadidos} partido(s) nuevo(s) sin duplicados!`);
   };
 
   const handleAddEquipoTabla = async (e) => {
@@ -1921,33 +2005,86 @@ export default function App() {
             </div>
 
             {isAdmin && showImportBox && (
-              <form className="form-box" onSubmit={handleImportarPartidosTexto}>
+              <div className="form-box">
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
-                  Importar partidos desde web (Futbuteo u otra)
+                  Sincronizar webs o importar texto (sin duplicados)
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                  Pega aquí el texto o listado de partidos de cualquier web. Se detectará categoría, fecha/hora, rival y CASA/FUERA automáticamente.
-                </p>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--muted)' }}>
+                    Webs configuradas ({urlsSincronizacion.length})
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      type="url"
+                      placeholder="Añadir otra URL (https://...)"
+                      value={nuevaUrlInput}
+                      onChange={(e) => setNuevaUrlInput(e.target.value)}
+                    />
+                    <button type="button" className="btn-rsvp" onClick={handleAgregarUrlSincronizacion}>
+                      + Web
+                    </button>
+                  </div>
+
+                  {urlsSincronizacion.map((u) => (
+                    <div
+                      key={u}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: '#ffffff',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        fontSize: 12
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u}</span>
+                      <button type="button" className="btn-danger" onClick={() => handleQuitarUrlSincronizacion(u)}>
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+
                   <button
                     type="button"
-                    className="btn-rsvp"
-                    onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FUTBUTEO)}
+                    className="btn-primary"
+                    disabled={sincronizandoUrls}
+                    onClick={handleSincronizarUrls}
                   >
-                    Cargar muestra Futbuteo Altamira
+                    <Download size={15} />
+                    {sincronizandoUrls ? 'Sincronizando webs...' : 'Sincronizar webs ahora'}
                   </button>
                 </div>
-                <textarea
-                  rows="6"
-                  placeholder={`Ejemplo:\nVIERNES 27 NOV\n18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA`}
-                  value={textoImportarPartidos}
-                  onChange={(e) => setTextoImportarPartidos(e.target.value)}
-                  required
-                />
-                <button type="submit" className="btn-primary">
-                  <Download size={15} /> Añadir partidos importados
-                </button>
-              </form>
+
+                <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                  <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                    Si alguna web bloquea la lectura automática, pega aquí los partidos y se añadirán sin duplicar:
+                  </p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-rsvp"
+                      onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FUTBUTEO)}
+                    >
+                      Cargar muestra Futbuteo Altamira
+                    </button>
+                  </div>
+                  <textarea
+                    rows="5"
+                    placeholder={`Ejemplo:\nVIERNES 27 NOV\n18:00 · BENJAMÍN FÚTBOL SALA ESCOLAR · Salesianos San Antonio Abad 'A' · FUERA`}
+                    value={textoImportarPartidos}
+                    onChange={(e) => setTextoImportarPartidos(e.target.value)}
+                    required
+                  />
+                  <button type="submit" className="btn-rsvp" style={{ justifyContent: 'center' }}>
+                    <Download size={14} /> Añadir partidos pegados
+                  </button>
+                </form>
+              </div>
             )}
 
             {isAdmin && showForm && (
