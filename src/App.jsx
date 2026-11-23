@@ -33,12 +33,14 @@ import {
   Navigation,
   LogOut,
   UserPlus,
-  Download
+  Download,
+  CopyX
 } from 'lucide-react';
 
 const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
+const MAX_PARTIDOS_POR_IMPORTACION = 80;
 
 const CATEGORIAS_BASE = [
   'Senior',
@@ -336,19 +338,47 @@ function parsearPartidosDesdeTexto(textoCrudo) {
   return resultados;
 }
 
-function normalizarClavePartido(partido) {
-  const norm = (v) =>
-    String(v || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim();
+function normalizarEquipoClave(nombre) {
+  const s = String(nombre || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/["""'']/g, '')
+    .replace(/\b(c\.?d\.?|c\.?f\.?s?\.?|f\.?s\.?|futsal|club|deportivo)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (/rafael altamira|picanya/.test(s)) return 'cd_rafael_altamira';
+  return s;
+}
 
-  const cat = norm(partido.categoria);
-  const fecha = norm(partido.fecha);
-  const equiposOrdenados = [norm(partido.local), norm(partido.visitante)].sort().join('__');
-  return `${cat}|${fecha}|${equiposOrdenados}`;
+function normalizarFechaClave(fechaStr) {
+  const raw = String(fechaStr || '').trim();
+  const m = raw.match(REGEX_FECHA_TEXTO);
+  if (m) {
+    const d = m[1].padStart(2, '0');
+    const mes = m[2].padStart(2, '0');
+    let a = m[3];
+    if (a.length === 2) a = `20${a}`;
+    return `${d}-${mes}-${a}`;
+  }
+  return raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizarClavePartido(partido) {
+  const fecha = normalizarFechaClave(partido.fecha);
+  const equiposOrdenados = [
+    normalizarEquipoClave(partido.local),
+    normalizarEquipoClave(partido.visitante)
+  ]
+    .filter(Boolean)
+    .sort()
+    .join('__');
+  return `${fecha}|${equiposOrdenados}`;
 }
 
 function obtenerMarcaTiempoPartido(partido) {
@@ -1604,6 +1634,8 @@ export default function App() {
     const unicos = [];
 
     for (const cand of candidatos) {
+      if (unicos.length >= MAX_PARTIDOS_POR_IMPORTACION) break;
+
       const localCrudo = String(cand.local || '').trim();
       const visitanteCrudo = String(cand.visitante || '').trim();
 
@@ -1700,6 +1732,41 @@ export default function App() {
     }
 
     return unicos.length;
+  };
+
+  const handleLimpiarDuplicadosPartidos = async () => {
+    const vistos = new Set();
+    const unicos = [];
+    const eliminados = [];
+
+    for (const p of partidos) {
+      const clave = normalizarClavePartido(p);
+      if (!clave || vistos.has(clave)) {
+        eliminados.push(p);
+      } else {
+        vistos.add(clave);
+        unicos.push(p);
+      }
+    }
+
+    if (eliminados.length === 0) {
+      alert('No había partidos duplicados.');
+      return;
+    }
+
+    guardarPartidosLocal(unicos);
+    if (firebaseOk) {
+      for (const item of eliminados) {
+        if (!/^(demo|c|p|a|m)\d+$/.test(item.id)) {
+          try {
+            await deleteDoc(doc(db, 'partidos', item.id));
+          } catch {
+            // Ignora error si ya no existe
+          }
+        }
+      }
+    }
+    alert(`Se eliminaron ${eliminados.length} partido(s) duplicado(s).`);
   };
 
   const handleLimpiarPartidosSinRival = async () => {
@@ -2452,6 +2519,13 @@ export default function App() {
               <h2 className="section-title"><Calendar size={19} /> Partidos y Asistencia</h2>
               {isAdmin && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={handleLimpiarDuplicadosPartidos}
+                  >
+                    <CopyX size={14} /> Limpiar duplicados
+                  </button>
                   <button
                     type="button"
                     className="btn-rsvp"
