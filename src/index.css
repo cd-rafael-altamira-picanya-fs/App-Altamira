@@ -22,6 +22,7 @@
 html,
 body {
   overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
   width: 100%;
 }
@@ -40,7 +41,7 @@ body {
   background-attachment: fixed;
   background-size: cover;
   color: var(--text);
-  padding-bottom: 124px;
+  padding-bottom: 128px;
   min-height: 100vh;
 }
 
@@ -184,6 +185,8 @@ body {
   width: 100%;
   margin: 0 auto;
   padding: 16px 16px 24px;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .section-header {
@@ -533,7 +536,7 @@ td {
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  padding: 10px 0 calc(20px + env(safe-area-inset-bottom, 16px));
+  padding: 10px 0 36px;
   z-index: 30;
 }
 
