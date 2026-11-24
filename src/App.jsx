@@ -1824,3 +1824,2392 @@ export default function App() {
       if (coincidenciaIdentidad.pinUsuario && coincidenciaIdentidad.pinUsuario.trim() === pinIntroducido) {
         const esDir = coincidenciaIdentidad.rol === 'Directiva';
         const esEspecial = esRolSinDorsal(coincidenciaIdentidad.rol);
+        const dorsalItem = String(coincidenciaIdentidad.dorsal || '').trim();
+        const perfilRecuperado = {
+          nombre: coincidenciaIdentidad.nombre || idRaw,
+          correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
+          rol: coincidenciaIdentidad.rol || 'Jugador',
+          categoria: esEspecial ? (coincidenciaIdentidad.rol || 'Entrenador') : (coincidenciaIdentidad.categoria || ''),
+          dorsal: (esEspecial || dorsalItem === '0') ? '' : dorsalItem,
+          telefono: limpiarTelefono(coincidenciaIdentidad.telefono || ''),
+          edad: esEspecial ? '' : normalizarEdad(coincidenciaIdentidad.edad || ''),
+          foto: coincidenciaIdentidad.foto || '',
+          pinUsuario: coincidenciaIdentidad.pinUsuario,
+          esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva || esEspecial),
+          tipoSlot: coincidenciaIdentidad.tipoSlot || ''
+        };
+        setPerfil(perfilRecuperado);
+        guardarLocalSeguro('cdra_perfil', perfilRecuperado);
+        guardarLocalSeguro('cdra_sesion_activa', '1');
+        if (esDir) {
+          guardarLocalSeguro('cdra_admin_activa', '1');
+        } else {
+          localStorage.removeItem('cdra_admin_activa');
+        }
+        setIsAdmin(esDir);
+        setSesionIniciada(true);
+        const completo = perfilJugadorCompleto(perfilRecuperado);
+        setForzarOnboarding(!completo);
+        setPinLoginInput('');
+        if (completo) {
+          irAAvisosAlEntrar();
+        }
+        return;
+      } else {
+        alert('La contraseña o PIN no coincide con ese nombre o seudónimo.');
+        return;
+      }
+    }
+
+    alert('No se encontró ese usuario. Puedes registrarte como jugador o usar el PIN inicial 1234.');
+  };
+
+  const handleGuardarConfiguracionObligatoria = async (e) => {
+    e.preventDefault();
+    const nombreLimpio = formNombre.trim();
+    const correoLimpio = formCorreo.trim().toLowerCase();
+    const esEspecial = esRolSinDorsal(formRol);
+    const dorsalRaw = String(formDorsal || '').trim();
+    const dorsalLimpio = (esEspecial || dorsalRaw === '0') ? '' : dorsalRaw;
+    const categoriaLimpia = esEspecial ? (formRol || 'Entrenador') : String(formCategoria).trim();
+    const telefonoLimpio = limpiarTelefono(formTelefono);
+    const edadLimpia = esEspecial ? '' : normalizarEdad(formEdad);
+    const pinLimpio = formPinNuevo.trim();
+
+    if (nombreLimpio.length < 2) {
+      alert('El campo Nombre / Seudónimo * es obligatorio.');
+      return;
+    }
+    if (!esEspecial && !dorsalLimpio) {
+      alert('El campo Dorsal * es obligatorio (y distinto de 0).');
+      return;
+    }
+    if (!esEspecial && !categoriaLimpia) {
+      alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    if (!esEspecial && telefonoLimpio.length < 6) {
+      alert('El campo Teléfono * es obligatorio para la ficha del club (mínimo 6 dígitos).');
+      return;
+    }
+    if (!esEspecial && !edadLimpia) {
+      alert('El campo Edad * es obligatorio (entre 1 y 99 años).');
+      return;
+    }
+    const idActualPerfil = perfil?.nombre
+      ? crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '')
+      : '';
+    if (
+      !esEspecial &&
+      existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia, idActualPerfil, perfil?.nombre || '')
+    ) {
+      alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
+      return;
+    }
+    if (pinLimpio.length < 4 || pinLimpio === PIN_INICIAL_OBLIGATORIO) {
+      alert('El campo Contraseña / PIN * es obligatorio (mínimo 4 caracteres y distinto de 1234).');
+      return;
+    }
+    if (pinLimpio !== formPinConfirm.trim()) {
+      alert('La confirmación de la contraseña / PIN no coincide.');
+      return;
+    }
+
+    const fotoAnterior = perfil?.foto || '';
+    const perfilActualizado = {
+      nombre: nombreLimpio,
+      correo: correoLimpio,
+      rol: formRol || 'Jugador',
+      categoria: categoriaLimpia,
+      dorsal: dorsalLimpio,
+      telefono: telefonoLimpio,
+      edad: edadLimpia,
+      foto: formFoto || '',
+      pinUsuario: pinLimpio,
+      esReservaDirectiva: esEspecial
+    };
+
+    setPerfil(perfilActualizado);
+    guardarLocalSeguro('cdra_perfil', perfilActualizado);
+    guardarLocalSeguro('cdra_sesion_activa', '1');
+    setForzarOnboarding(false);
+    setModoRegistroJugador(false);
+    setSesionIniciada(true);
+    irAAvisosAlEntrar();
+    await sincronizarPerfilEnClub(perfilActualizado, fotoAnterior);
+    alert('¡Perfil guardado correctamente!');
+  };
+
+  const handleCrearPerfilEspecialDirectiva = async (e) => {
+    e.preventDefault();
+    const perfilesEspecialesActuales = deduplicarPerfilesLista(
+      perfilesClub.filter((p) => p.esReservaDirectiva || esRolSinDorsal(p.rol))
+    );
+    if (perfilesEspecialesActuales.length >= MAX_PERFILES_ESPECIALES_DIRECTIVA) {
+      alert('Ya has creado el máximo de 4 perfiles especiales. Borra uno si quieres crear otro.');
+      return;
+    }
+
+    const nombreLimpio = nuevoPerfilEspecial.nombre.trim();
+    const pinLimpio = nuevoPerfilEspecial.pinUsuario.trim();
+    const rolElegido = nuevoPerfilEspecial.rolEspecial || 'Entrenador';
+
+    if (nombreLimpio.length < 2) {
+      alert('Escribe el nombre o seudónimo del perfil.');
+      return;
+    }
+    if (pinLimpio.length < 4) {
+      alert('Escribe una contraseña o PIN de al menos 4 caracteres.');
+      return;
+    }
+
+    const idDoc = crearIdPerfil(nombreLimpio, '', '', rolElegido);
+    const registroEspecial = {
+      id: idDoc,
+      nombre: nombreLimpio,
+      correo: '',
+      rol: rolElegido,
+      categoria: rolElegido,
+      dorsal: '',
+      telefono: '',
+      edad: '',
+      foto: nuevoPerfilEspecial.foto || '',
+      pinUsuario: pinLimpio,
+      esReservaDirectiva: true,
+      tipoSlot: rolElegido,
+      actualizadoEn: serverTimestamp()
+    };
+
+    const claveNueva = obtenerClaveUnicaPerfil(registroEspecial);
+    const nuevaLista = [
+      registroEspecial,
+      ...perfilesClub.filter((item) => item.id !== idDoc && obtenerClaveUnicaPerfil(item) !== claveNueva)
+    ];
+    guardarPerfilesLocal(nuevaLista);
+    if (firebaseOk) {
+      try {
+        await setDoc(doc(db, 'perfiles', idDoc), registroEspecial, { merge: true });
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+
+    setNuevoPerfilEspecial({
+      rolEspecial: '2º Entrenador',
+      nombre: '',
+      pinUsuario: '',
+      foto: ''
+    });
+    alert(`Perfil de ${rolElegido} creado correctamente sin dorsal.`);
+  };
+
+  const handleCerrarSesion = () => {
+    localStorage.removeItem('cdra_sesion_activa');
+    localStorage.removeItem('cdra_admin_activa');
+    setSesionIniciada(false);
+    setIsAdmin(false);
+    setShowForm(false);
+    setShowImportBox(false);
+    setShowImportTablaBox(false);
+    setForzarOnboarding(false);
+    setModoRegistroJugador(false);
+    setIdentificadorLoginInput('');
+    setPinLoginInput('');
+  };
+
+  const handleAbrirEditarPerfil = () => {
+    const dorsalActual = String(perfil.dorsal || '').trim();
+    setFormNombre(perfil.nombre || '');
+    setFormCorreo(perfil.correo || '');
+    setFormRol(perfil.rol || 'Jugador');
+    setFormCategoria(perfil.categoria || '');
+    setFormDorsal(dorsalActual === '0' ? '' : dorsalActual);
+    setFormTelefono(perfil.telefono || '');
+    setFormEdad(perfil.edad || '');
+    setFormFoto(perfil.foto || '');
+    setFormPinNuevo(perfil.pinUsuario || '');
+    setFormPinConfirm(perfil.pinUsuario || '');
+    setForzarOnboarding(true);
+  };
+
+  const handleCambiarPinDirectiva = (e) => {
+    e.preventDefault();
+    if (pinDirActualInput !== pinDirectiva && pinDirActualInput !== PIN_DIRECTIVA_INICIAL) {
+      alert('El PIN actual de directiva no es correcto');
+      return;
+    }
+    if (pinDirNuevoInput.trim().length < 4) {
+      alert('El nuevo PIN de directiva debe tener al menos 4 caracteres');
+      return;
+    }
+    if (pinDirNuevoInput !== pinDirConfirmInput) {
+      alert('La confirmación del nuevo PIN de directiva no coincide');
+      return;
+    }
+    const nuevoPin = pinDirNuevoInput.trim();
+    guardarLocalSeguro('cdra_pin_directiva', nuevoPin);
+    setPinDirectiva(nuevoPin);
+    setPinDirActualInput('');
+    setPinDirNuevoInput('');
+    setPinDirConfirmInput('');
+    alert('PIN de directiva actualizado correctamente');
+  };
+
+  const handleRestablecerPinDirectiva = () => {
+    guardarLocalSeguro('cdra_pin_directiva', PIN_DIRECTIVA_INICIAL);
+    setPinDirectiva(PIN_DIRECTIVA_INICIAL);
+    setPinDirActualInput('');
+    setPinDirNuevoInput('');
+    setPinDirConfirmInput('');
+    alert(`PIN de directiva restablecido a ${PIN_DIRECTIVA_INICIAL}`);
+  };
+
+  const [nuevoPartido, setNuevoPartido] = useState({
+    categoria: 'Senior ♂',
+    local: 'C.D. Rafael Altamira FS',
+    visitante: '',
+    fecha: '',
+    pabellon: 'Pabellón Municipal Picanya',
+    resultado: 'VS'
+  });
+
+  const [nuevoEquipoTabla, setNuevoEquipoTabla] = useState({
+    pos: '',
+    equipo: '',
+    pts: '0',
+    pj: '0',
+    pg: '0',
+    pe: '0',
+    pp: '0',
+    gf: '0',
+    gc: '0'
+  });
+
+  const [nuevoJugador, setNuevoJugador] = useState({
+    dorsal: '',
+    nombre: '',
+    posicion: 'Ala',
+    categoria: '',
+    telefono: '',
+    edad: '',
+    goles: '0',
+    foto: ''
+  });
+
+  const [nuevoAviso, setNuevoAviso] = useState({
+    titulo: '',
+    mensaje: '',
+    urgente: false
+  });
+
+  useEffect(() => {
+    if (!sesionIniciada) return;
+    cargarDatosUnaVez(false, false);
+  }, [sesionIniciada, cargarDatosUnaVez]);
+
+  const toggleAdmin = () => {
+    if (isAdmin) {
+      localStorage.removeItem('cdra_admin_activa');
+      setIsAdmin(false);
+      setShowForm(false);
+      setShowImportBox(false);
+      setShowImportTablaBox(false);
+      return;
+    }
+    const pin = window.prompt('Introduce el PIN de Directiva:');
+    if (pin === null) return;
+    if (pin === pinDirectiva || pin === PIN_DIRECTIVA_INICIAL) {
+      if (pin === PIN_DIRECTIVA_INICIAL && pinDirectiva !== PIN_DIRECTIVA_INICIAL) {
+        guardarLocalSeguro('cdra_pin_directiva', PIN_DIRECTIVA_INICIAL);
+        setPinDirectiva(PIN_DIRECTIVA_INICIAL);
+      }
+      guardarLocalSeguro('cdra_admin_activa', '1');
+      setIsAdmin(true);
+    } else {
+      alert('PIN de directiva incorrecto');
+    }
+  };
+
+  const toggleAsistencia = async (partido) => {
+    const nombreUser = perfil.nombre.trim() || 'Anónimo';
+    const listaActual = partido.asistentes || [];
+    const yaVa = listaActual.includes(nombreUser);
+    const nuevaLista = yaVa
+      ? listaActual.filter((n) => n !== nombreUser)
+      : [...listaActual, nombreUser];
+
+    const actualizada = partidos.map((p) => (p.id === partido.id ? { ...p, asistentes: nuevaLista } : p));
+    guardarPartidosLocal(actualizada);
+    if (firebaseOk && !String(partido.id || '').startsWith('demo')) {
+      try {
+        await updateDoc(doc(db, 'partidos', partido.id), { asistentes: nuevaLista });
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
+  const sumarGol = async (jugador, delta) => {
+    if (!puedeGestionarAlaYGoles) return;
+    const nuevosGoles = Math.max(0, Number(jugador.goles || 0) + delta);
+    const actualizada = plantilla.map((j) => (j.id === jugador.id ? { ...j, goles: nuevosGoles } : j));
+    guardarPlantillaLocal(actualizada);
+    if (firebaseOk && !jugador.id.startsWith('p')) {
+      try {
+        await updateDoc(doc(db, 'plantilla', jugador.id), { goles: nuevosGoles });
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
+  const registrarPartidosSinDuplicar = async (candidatos) => {
+    const clavesVistas = new Set(partidos.map((p) => normalizarClavePartido(p)));
+    const unicos = [];
+
+    for (const cand of candidatos) {
+      if (unicos.length >= MAX_PARTIDOS_POR_IMPORTACION) break;
+
+      const localCrudo = String(cand.local || '').trim();
+      const visitanteCrudo = String(cand.visitante || '').trim();
+
+      if (/^descansa(-\d+)?$/i.test(localCrudo) || /^descansa(-\d+)?$/i.test(visitanteCrudo)) {
+        continue;
+      }
+
+      const esLocalAltamira = esEquipoClubAltamira(localCrudo);
+      const esVisitanteAltamira = esEquipoClubAltamira(visitanteCrudo);
+
+      if (!esLocalAltamira && !esVisitanteAltamira) {
+        continue;
+      }
+
+      const fechaCandidata = String(cand.fecha || '').trim();
+      const fechaDetectada =
+        (fechaCandidata && !/^(próximamente|proximamente|por confirmar)$/i.test(fechaCandidata)
+          ? fechaCandidata
+          : '') ||
+        extraerFechaDeTexto(`${fechaCandidata} ${localCrudo} ${visitanteCrudo}`) ||
+        fechaCandidata ||
+        'Por confirmar';
+
+      let rivalLimpio = 'Rival por confirmar';
+      if (esLocalAltamira && visitanteCrudo && !esVisitanteAltamira) {
+        rivalLimpio = limpiarNombreRival(visitanteCrudo);
+      } else if (esVisitanteAltamira && localCrudo && !esLocalAltamira) {
+        rivalLimpio = limpiarNombreRival(localCrudo);
+      } else if (visitanteCrudo && !esTextoFechaOJornada(visitanteCrudo)) {
+        rivalLimpio = limpiarNombreRival(visitanteCrudo);
+      } else if (localCrudo && !esTextoFechaOJornada(localCrudo)) {
+        rivalLimpio = limpiarNombreRival(localCrudo);
+      }
+
+      const clubLocal = 'C.D. Rafael Altamira FS';
+      const juegaFuera = Boolean(esVisitanteAltamira && !esLocalAltamira);
+
+      const localFinal = juegaFuera ? rivalLimpio : clubLocal;
+      const visitanteFinal = juegaFuera ? clubLocal : rivalLimpio;
+
+      const pabellonCalculado = juegaFuera
+        ? `Pabellón visitante (${rivalLimpio})`
+        : 'Pabellón Municipal Picanya';
+
+      const pabellonFinal =
+        cand.pabellon &&
+        !esTextoFechaOJornada(cand.pabellon) &&
+        !(juegaFuera && /pabell[oó]n municipal picanya/i.test(cand.pabellon))
+          ? cand.pabellon
+          : pabellonCalculado;
+
+      const itemLimpio = {
+        categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
+        local: localFinal,
+        visitante: visitanteFinal,
+        fecha: fechaDetectada,
+        pabellon: pabellonFinal,
+        resultado: cand.resultado || 'VS'
+      };
+
+      const clave = normalizarClavePartido(itemLimpio);
+      if (!clave || clavesVistas.has(clave)) continue;
+      clavesVistas.add(clave);
+      unicos.push(itemLimpio);
+    }
+
+    if (unicos.length === 0) return 0;
+
+    const nuevosConId = unicos.map((item, idx) => ({
+      id: `sync_${Date.now()}_${idx}`,
+      ...item,
+      asistentes: [],
+      createdAt: serverTimestamp()
+    }));
+
+    let listaActualizada = [...nuevosConId, ...partidos];
+    guardarPartidosLocal(listaActualizada);
+
+    if (firebaseOk) {
+      const resultadosAltas = await Promise.allSettled(
+        unicos.map((item) =>
+          addDoc(collection(db, 'partidos'), { ...item, asistentes: [], createdAt: serverTimestamp() })
+        )
+      );
+
+      let huboIdReal = false;
+      listaActualizada = listaActualizada.map((p) => {
+        const idx = nuevosConId.findIndex((n) => n.id === p.id);
+        if (idx !== -1 && resultadosAltas[idx]?.status === 'fulfilled') {
+          huboIdReal = true;
+          return { ...p, id: resultadosAltas[idx].value.id };
+        }
+        return p;
+      });
+
+      if (huboIdReal) {
+        guardarPartidosLocal(listaActualizada);
+      }
+    }
+
+    return unicos.length;
+  };
+
+  const registrarClasificacionSinDuplicar = async (candidatos) => {
+    const clavesExistentes = new Set(
+      clasificacion.map((item) => normalizarNombreEquipoClasificacion(item.equipo))
+    );
+    const nuevos = [];
+
+    for (const cand of candidatos) {
+      if (nuevos.length >= MAX_EQUIPOS_CLASIFICACION) break;
+      const nombreEq = sanearNombreEquipoTabla([String(cand.equipo || '').trim()]);
+      const claveEq = normalizarNombreEquipoClasificacion(nombreEq);
+      if (!nombreEq || !claveEq || clavesExistentes.has(claveEq)) continue;
+
+      clavesExistentes.add(claveEq);
+      const gf = Number(cand.gf || 0);
+      const gc = Number(cand.gc || 0);
+      nuevos.push({
+        pos: Number(cand.pos || clasificacion.length + nuevos.length + 1),
+        equipo: nombreEq,
+        pts: Number(cand.pts || 0),
+        pj: Number(cand.pj || 0),
+        pg: Number(cand.pg || 0),
+        pe: Number(cand.pe || 0),
+        pp: Number(cand.pp || 0),
+        gf,
+        gc,
+        dif: calcularDifClasificacion(gf, gc, cand.dif),
+        escudo: cand.escudo || ''
+      });
+    }
+
+    if (nuevos.length === 0) return 0;
+
+    const nuevosConId = nuevos.map((item, idx) => ({
+      id: `eq_sync_${Date.now()}_${idx}`,
+      ...item
+    }));
+
+    let ordenada = [...clasificacion, ...nuevosConId].sort((a, b) => {
+      const posA = Number(a.pos || 999);
+      const posB = Number(b.pos || 999);
+      if (posA !== posB) return posA - posB;
+      if (Number(b.pts || 0) !== Number(a.pts || 0)) {
+        return Number(b.pts || 0) - Number(a.pts || 0);
+      }
+      return calcularDifClasificacion(b.gf, b.gc, b.dif) - calcularDifClasificacion(a.gf, a.gc, a.dif);
+    });
+
+    guardarClasificacionLocal(ordenada);
+
+    if (firebaseOk) {
+      const resultadosAltas = await Promise.allSettled(
+        nuevos.map((item) => addDoc(collection(db, 'clasificacion'), item))
+      );
+
+      let huboIdReal = false;
+      ordenada = ordenada.map((c) => {
+        const idx = nuevosConId.findIndex((n) => n.id === c.id);
+        if (idx !== -1 && resultadosAltas[idx]?.status === 'fulfilled') {
+          huboIdReal = true;
+          return { ...c, id: resultadosAltas[idx].value.id };
+        }
+        return c;
+      });
+
+      if (huboIdReal) {
+        guardarClasificacionLocal(ordenada);
+      }
+    }
+
+    return nuevos.length;
+  };
+
+  const handleImportarClasificacionTexto = async (e) => {
+    e.preventDefault();
+    const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion);
+    if (parseados.length === 0) {
+      alert('No se detectaron filas de clasificación válidas en el texto pegado.');
+      return;
+    }
+
+    const añadidos = await registrarClasificacionSinDuplicar(parseados);
+    if (añadidos === 0) {
+      alert('Esos equipos ya estaban en la clasificación (0 duplicados).');
+      return;
+    }
+
+    setTextoImportarClasificacion('');
+    setShowImportTablaBox(false);
+    alert(`¡Se importaron ${añadidos} equipo(s) a la clasificación sin duplicados!`);
+  };
+
+  const handleLimpiarTablaCompleta = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm('¿Vaciar toda la tabla de clasificación para volver a importarla limpia?')) {
+      return;
+    }
+    const anteriores = [...clasificacion];
+    guardarClasificacionLocal([]);
+    if (firebaseOk) {
+      await Promise.allSettled(
+        anteriores
+          .filter((item) => !/^c\d+$/.test(item.id))
+          .map((item) => deleteDoc(doc(db, 'clasificacion', item.id)))
+      );
+    }
+  };
+
+  const handleSubirEscudoEquipo = async (equipoItem, file) => {
+    if (!isAdmin || !file) return;
+    procesarFotoCircular(file, async (dataUrl) => {
+      if (dataUrl === (equipoItem.escudo || '')) return;
+      const actualizada = clasificacion.map((c) =>
+        c.id === equipoItem.id ? { ...c, escudo: dataUrl } : c
+      );
+      guardarClasificacionLocal(actualizada);
+      if (firebaseOk && !/^c\d+$/.test(equipoItem.id)) {
+        try {
+          await updateDoc(doc(db, 'clasificacion', equipoItem.id), { escudo: dataUrl });
+        } catch {
+          // Mantiene respaldo local
+        }
+      }
+    });
+  };
+
+  const handleLimpiarDuplicadosPartidos = async () => {
+    const vistos = new Set();
+    const unicos = [];
+    const eliminados = [];
+
+    for (const p of partidos) {
+      const clave = normalizarClavePartido(p);
+      if (!clave || vistos.has(clave)) {
+        eliminados.push(p);
+      } else {
+        vistos.add(clave);
+        unicos.push(p);
+      }
+    }
+
+    if (eliminados.length === 0) {
+      alert('No había partidos duplicados.');
+      return;
+    }
+
+    guardarPartidosLocal(unicos);
+    if (firebaseOk) {
+      await Promise.allSettled(
+        eliminados
+          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
+          .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
+      );
+    }
+    alert(`Se eliminaron ${eliminados.length} partido(s) duplicado(s).`);
+  };
+
+  const handleLimpiarPartidosSinRival = async () => {
+    const partidosValidos = partidos.filter((p) => {
+      const rival = p.local === 'C.D. Rafael Altamira FS' ? p.visitante : p.local;
+      return (
+        !esNombreInvalidoOResidual(rival) &&
+        !esTextoFechaOJornada(rival) &&
+        !/^(próximamente|proximamente|por confirmar|rival por confirmar)$/i.test(String(rival || '').trim())
+      );
+    });
+    const eliminados = partidos.filter((p) => !partidosValidos.some((v) => v.id === p.id));
+    if (eliminados.length === 0) {
+      alert('No hay partidos con fechas, jornadas o nombres incompletos como rival.');
+      return;
+    }
+    guardarPartidosLocal(partidosValidos);
+    if (firebaseOk) {
+      await Promise.allSettled(
+        eliminados
+          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
+          .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
+      );
+    }
+    alert(`Se eliminaron ${eliminados.length} partido(s) con datos incompletos o de fecha/jornada como rival.`);
+  };
+
+  const handleAgregarUrlSincronizacion = () => {
+    const limpia = nuevaUrlInput.trim();
+    if (!limpia) return;
+    if (!urlsSincronizacion.includes(limpia)) {
+      const actualizada = [...urlsSincronizacion, limpia];
+      setUrlsSincronizacion(actualizada);
+      guardarLocalSeguro('cdra_urls_partidos', actualizada);
+    }
+    setNuevaUrlInput('');
+  };
+
+  const handleQuitarUrlSincronizacion = (urlABorrar) => {
+    const actualizada = urlsSincronizacion.filter((u) => u !== urlABorrar);
+    setUrlsSincronizacion(actualizada);
+    guardarLocalSeguro('cdra_urls_partidos', actualizada);
+  };
+
+  const handleSincronizarUrls = async () => {
+    if (urlsSincronizacion.length === 0) {
+      alert('Añade al menos una URL primero.');
+      return;
+    }
+    setSincronizandoUrls(true);
+    try {
+      const resp = await fetch('/api/sincronizar-partidos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: urlsSincronizacion })
+      });
+      const data = await resp.json();
+
+      if (!resp.ok || !data.ok) {
+        alert(data.error || 'No se pudo completar la sincronización automática.');
+        return;
+      }
+
+      const añadidos = await registrarPartidosSinDuplicar(data.partidos || []);
+      const añadidosTabla = await registrarClasificacionSinDuplicar(data.clasificacion || []);
+      const avisoBloqueos =
+        data.errores && data.errores.length > 0
+          ? `\nNota: algunas webs cargan contenido dinámico o restringen lectura directa (${data.errores.map((e) => e.motivo).join(', ')}). Usa "Pegar texto" para esas.`
+          : '';
+
+      alert(
+        añadidos > 0 || añadidosTabla > 0
+          ? `¡Listo! Se añadieron ${añadidos} partido(s) y ${añadidosTabla} equipo(s) en clasificación sin duplicados.${avisoBloqueos}`
+          : `Todo al día: no había novedades que añadir (0 duplicados).${avisoBloqueos}`
+      );
+    } catch {
+      alert('No se pudo conectar con /api/sincronizar-partidos. Usa el cuadro de "Pegar texto" si estás probando en local.');
+    } finally {
+      setSincronizandoUrls(false);
+    }
+  };
+
+  const handleAddPartido = async (e) => {
+    e.preventDefault();
+    if (!nuevoPartido.visitante) return;
+    const item = { ...nuevoPartido, asistentes: [], createdAt: serverTimestamp() };
+    const idTemporal = `part_${Date.now()}`;
+    const actualizada = [{ id: idTemporal, ...item }, ...partidos];
+    guardarPartidosLocal(actualizada);
+    setShowForm(false);
+    setNuevoPartido({
+      categoria: 'Senior ♂',
+      local: 'C.D. Rafael Altamira FS',
+      visitante: '',
+      fecha: '',
+      pabellon: 'Pabellón Municipal Picanya',
+      resultado: 'VS'
+    });
+    if (firebaseOk) {
+      try {
+        const ref = await addDoc(collection(db, 'partidos'), item);
+        guardarPartidosLocal(actualizada.map((p) => (p.id === idTemporal ? { ...p, id: ref.id } : p)));
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
+  const handleImportarPartidosTexto = async (e) => {
+    e.preventDefault();
+    const parseados = parsearPartidosDesdeTexto(textoImportarPartidos);
+    if (parseados.length === 0) {
+      alert('No se encontraron partidos de C.D. Rafael Altamira en el texto pegado.');
+      return;
+    }
+
+    const añadidos = await registrarPartidosSinDuplicar(parseados);
+    if (añadidos === 0) {
+      alert('Esos partidos ya estaban registrados en la app (0 duplicados).');
+      return;
+    }
+
+    setTextoImportarPartidos('');
+    setShowImportBox(false);
+    alert(`¡Se importaron ${añadidos} partido(s) nuevo(s) sin duplicados!`);
+  };
+
+  const handleAddEquipoTabla = async (e) => {
+    e.preventDefault();
+    if (!nuevoEquipoTabla.equipo) return;
+    const gf = Number(nuevoEquipoTabla.gf || 0);
+    const gc = Number(nuevoEquipoTabla.gc || 0);
+    const item = {
+      pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
+      equipo: sanearNombreEquipoTabla([nuevoEquipoTabla.equipo]),
+      pts: Number(nuevoEquipoTabla.pts || 0),
+      pj: Number(nuevoEquipoTabla.pj || 0),
+      pg: Number(nuevoEquipoTabla.pg || 0),
+      pe: Number(nuevoEquipoTabla.pe || 0),
+      pp: Number(nuevoEquipoTabla.pp || 0),
+      gf,
+      gc,
+      dif: calcularDifClasificacion(gf, gc),
+      escudo: ''
+    };
+    const idTemporal = `eq_${Date.now()}`;
+    const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => Number(a.pos || 999) - Number(b.pos || 999));
+    guardarClasificacionLocal(actualizada);
+    setShowForm(false);
+    setNuevoEquipoTabla({ pos: '', equipo: '', pts: '0', pj: '0', pg: '0', pe: '0', pp: '0', gf: '0', gc: '0' });
+    if (firebaseOk) {
+      try {
+        const ref = await addDoc(collection(db, 'clasificacion'), item);
+        guardarClasificacionLocal(actualizada.map((c) => (c.id === idTemporal ? { ...c, id: ref.id } : c)));
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
+  const handleAddJugador = async (e) => {
+    e.preventDefault();
+    const dorsalLimpio = String(nuevoJugador.dorsal || '').trim();
+    const nombreLimpio = String(nuevoJugador.nombre || '').trim();
+    const categoriaLimpia = String(nuevoJugador.categoria || '').trim();
+    const telefonoLimpio = limpiarTelefono(nuevoJugador.telefono);
+    const edadLimpia = normalizarEdad(nuevoJugador.edad);
+
+    if (!dorsalLimpio) {
+      alert('El campo Dorsal / Número * es obligatorio.');
+      return;
+    }
+    if (!nombreLimpio) {
+      alert('El campo Nombre del jugador * es obligatorio.');
+      return;
+    }
+    if (!categoriaLimpia) {
+      alert('El campo Categoría * es obligatorio.');
+      return;
+    }
+    if (telefonoLimpio.length < 6) {
+      alert('El campo Teléfono * es obligatorio para la ficha del club.');
+      return;
+    }
+    if (!edadLimpia) {
+      alert('El campo Edad * es obligatorio (entre 1 y 99 años).');
+      return;
+    }
+    if (existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia)) {
+      alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
+      return;
+    }
+
+    const item = {
+      ...nuevoJugador,
+      dorsal: dorsalLimpio,
+      nombre: nombreLimpio,
+      posicion: puedeGestionarAlaYGoles ? (nuevoJugador.posicion || 'Ala') : 'Sin asignar',
+      categoria: categoriaLimpia,
+      telefono: telefonoLimpio,
+      edad: edadLimpia,
+      goles: puedeGestionarAlaYGoles ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
+      foto: nuevoJugador.foto || '',
+      createdAt: serverTimestamp()
+    };
+    const idTemporal = `jug_${Date.now()}`;
+    const actualizada = [...plantilla, { id: idTemporal, ...item }];
+    guardarPlantillaLocal(actualizada);
+    setShowForm(false);
+    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', telefono: '', edad: '', goles: '0', foto: '' });
+
+    if (firebaseOk) {
+      try {
+        const ref = await addDoc(collection(db, 'plantilla'), item);
+        const conIdReal = actualizada.map((j) => (j.id === idTemporal ? { ...j, id: ref.id } : j));
+        guardarPlantillaLocal(conIdReal);
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
+  const handleAddAviso = async (e) => {
+    e.preventDefault();
+    if (!puedePublicarAvisos) {
+      alert('Solo Directiva o un entrenador pueden publicar avisos.');
+      return;
+    }
+    if (!nuevoAviso.titulo || !nuevoAviso.mensaje) return;
+
+    const autorAviso = perfil.nombre || (isAdmin ? 'Directiva' : perfil.rol || 'Entrenador');
+    const item = {
+      ...nuevoAviso,
+      autor: autorAviso,
+      rolAutor: isAdmin ? 'Directiva' : (perfil.rol || 'Entrenador'),
+      createdAt: serverTimestamp()
+    };
+    const idTemporal = `av_${Date.now()}`;
+    avisosVistosRef.current.add(idTemporal);
+    const actualizada = [{ id: idTemporal, ...item }, ...avisos];
+    guardarAvisosLocal(actualizada);
+    setShowForm(false);
+    setNuevoAviso({ titulo: '', mensaje: '', urgente: false });
+
+    if (firebaseOk) {
+      try {
+        const ref = await addDoc(collection(db, 'avisos'), item);
+        avisosVistosRef.current.add(ref.id);
+        guardarAvisosLocal(actualizada.map((a) => (a.id === idTemporal ? { ...a, id: ref.id } : a)));
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
+  const handleDelete = async (col, id) => {
+    if (col === 'partidos') {
+      guardarPartidosLocal(partidos.filter((x) => x.id !== id));
+    } else if (col === 'clasificacion') {
+      guardarClasificacionLocal(clasificacion.filter((x) => x.id !== id));
+    } else if (col === 'plantilla') {
+      guardarPlantillaLocal(plantilla.filter((x) => x.id !== id));
+    } else if (col === 'avisos') {
+      guardarAvisosLocal(avisos.filter((x) => x.id !== id));
+    } else if (col === 'perfiles') {
+      const objetivo = perfilesClub.find((x) => x.id === id);
+      const claveObjetivo = objetivo ? obtenerClaveUnicaPerfil(objetivo) : '';
+      guardarPerfilesLocal(
+        perfilesClub.filter(
+          (x) => x.id !== id && (!claveObjetivo || obtenerClaveUnicaPerfil(x) !== claveObjetivo)
+        )
+      );
+    }
+
+    if (firebaseOk && !/^(demo|c|p|a|m)\d+$/.test(id)) {
+      try {
+        await deleteDoc(doc(db, col, id));
+      } catch {
+        // Eliminado localmente aunque el documento no existiera en Firebase
+      }
+    }
+  };
+
+  const { proximos: partidosProximos, jugados: partidosJugados } = useMemo(
+    () => separarPartidosProximosYJugados(partidos),
+    [partidos]
+  );
+
+  const goleadoresOrdenados = useMemo(
+    () => [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0)),
+    [plantilla]
+  );
+
+  const miIdPerfil = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '');
+  const miClavePerfil = obtenerClaveUnicaPerfil({ ...perfil, id: miIdPerfil });
+
+  const {
+    directivasVisibles,
+    entrenadoresVisibles,
+    usuariosMasculinosOrdenados,
+    usuariosFemeninosOrdenados,
+    totalPerfilesVisibles
+  } = useMemo(() => {
+    const mapa = new Map();
+    for (const p of deduplicarPerfilesLista(perfilesClub)) {
+      if (p.nombre || p.dorsal || p.foto || p.rol) {
+        mapa.set(obtenerClaveUnicaPerfil(p), p);
+      }
+    }
+    if (perfil.nombre || perfil.dorsal || perfil.foto || perfil.rol) {
+      const dorsalPerfil = String(perfil.dorsal || '').trim();
+      const perfilActualObj = {
+        id: miIdPerfil,
+        nombre: perfil.nombre || 'Sin nombre',
+        correo: perfil.correo || '',
+        rol: perfil.rol || 'Jugador',
+        categoria: esRolSinDorsal(perfil.rol) ? (perfil.rol || 'Entrenador') : (perfil.categoria || 'Sin categoría'),
+        dorsal: (esRolSinDorsal(perfil.rol) || dorsalPerfil === '0') ? '' : dorsalPerfil,
+        telefono: limpiarTelefono(perfil.telefono || ''),
+        edad: esRolSinDorsal(perfil.rol) ? '' : normalizarEdad(perfil.edad || ''),
+        foto: perfil.foto || '',
+        esReservaDirectiva: Boolean(perfil.esReservaDirectiva)
+      };
+      const prev = mapa.get(miClavePerfil);
+      mapa.set(miClavePerfil, {
+        ...(prev || {}),
+        ...perfilActualObj,
+        foto: perfilActualObj.foto || prev?.foto || ''
+      });
+    }
+
+    const todos = Array.from(mapa.values());
+    const directivas = todos.filter((item) => esDirectiva(item));
+    const entrenadores = todos.filter((item) => !esDirectiva(item) && esStaffPrioritario(item));
+    const restoUsuarios = todos.filter((item) => !esDirectiva(item) && !esStaffPrioritario(item));
+
+    const femeninos = restoUsuarios
+      .filter((item) => esPerfilFemenino(item))
+      .sort((a, b) =>
+        String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', {
+          sensitivity: 'base'
+        })
+      );
+
+    const masculinos = restoUsuarios
+      .filter((item) => !esPerfilFemenino(item))
+      .sort((a, b) =>
+        String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', {
+          sensitivity: 'base'
+        })
+      );
+
+    return {
+      directivasVisibles: directivas,
+      entrenadoresVisibles: entrenadores,
+      usuariosMasculinosOrdenados: masculinos,
+      usuariosFemeninosOrdenados: femeninos,
+      totalPerfilesVisibles: todos.length
+    };
+  }, [perfilesClub, perfil, miIdPerfil, miClavePerfil]);
+
+  const usuariosPorGeneroActual =
+    generoPerfilesTab === 'femenina'
+      ? usuariosFemeninosOrdenados
+      : usuariosMasculinosOrdenados;
+
+  const renderTarjetaPartido = (p, yaJugado = false) => {
+    const asistentes = p.asistentes || [];
+    const voy = asistentes.includes(perfil.nombre);
+
+    const fechaRescatada =
+      (p.fecha && !/^(próximamente|proximamente|por confirmar)$/i.test(String(p.fecha).trim())
+        ? String(p.fecha).trim()
+        : '') ||
+      extraerFechaDeTexto(`${p.fecha || ''} ${p.local || ''} ${p.visitante || ''}`) ||
+      'Por confirmar';
+
+    const localTexto = esTextoFechaOJornada(p.local) ? 'Rival por confirmar' : p.local;
+    const visitanteTexto = esTextoFechaOJornada(p.visitante) ? 'Rival por confirmar' : p.visitante;
+    const juegaFueraTarjeta =
+      esEquipoClubAltamira(visitanteTexto) && !esEquipoClubAltamira(localTexto);
+    const rivalTarjeta = juegaFueraTarjeta ? localTexto : visitanteTexto;
+    const pabellonBase =
+      p.pabellon &&
+      !esTextoFechaOJornada(p.pabellon) &&
+      !(juegaFueraTarjeta && /pabell[oó]n municipal picanya/i.test(p.pabellon))
+        ? String(p.pabellon)
+        : juegaFueraTarjeta
+        ? `Pabellón visitante (${rivalTarjeta})`
+        : 'Pabellón Municipal Picanya';
+
+    const pabellonTexto = pabellonBase.replace(/\(([^)]*)\)/g, (_, inner) =>
+      esTextoFechaOJornada(inner) ? '(Rival por confirmar)' : `(${inner})`
+    );
+
+    const urlMaps = obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTarjeta);
+
+    return (
+      <div
+        key={p.id}
+        className="card"
+        style={yaJugado ? { opacity: 0.9 } : undefined}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className={`tag ${p.resultado !== 'VS' ? 'result' : ''}`}>
+              <TextoConSignoGenero texto={p.categoria} />
+            </span>
+            {yaJugado && (
+              <span className="tag" style={{ background: '#e2e8f0', color: '#475569' }}>
+                Jugado
+              </span>
+            )}
+          </div>
+          {isAdmin && (
+            <button className="btn-danger" onClick={() => handleDelete('partidos', p.id)}>
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+        <div className="match-teams">
+          <span style={{ flex: 1 }}>{localTexto}</span>
+          <span className="match-score">{p.resultado || 'VS'}</span>
+          <span style={{ flex: 1, textAlign: 'right' }}>{visitanteTexto}</span>
+        </div>
+        <div className="match-meta">
+          <span><Clock size={13} /> {fechaRescatada}</span>
+          <a
+            href={urlMaps}
+            target="_blank"
+            rel="noreferrer"
+            title="Abrir ubicación en Google Maps"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              color: 'var(--primary)',
+              fontWeight: 700,
+              textDecoration: 'underline'
+            }}
+          >
+            <MapPin size={13} /> {pabellonTexto}
+          </a>
+        </div>
+        <div className="rsvp-bar">
+          <span>Convocados: <strong>{asistentes.length}</strong></span>
+          <div className="rsvp-btns">
+            <button
+              className={`btn-rsvp ${voy ? 'yes' : ''}`}
+              onClick={() => toggleAsistencia(p)}
+            >
+              {voy ? '✓ Voy al partido' : 'Confirmar asistencia'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFilaPerfil = (item) => {
+    const esEspecialItem = esRolSinDorsal(item.rol);
+    const dorsalItem = String(item.dorsal || '').trim();
+    const telefonoItem = limpiarTelefono(item.telefono || '');
+    const edadItem = normalizarEdad(item.edad || '');
+    const esUsuarioActual = obtenerClaveUnicaPerfil(item) === miClavePerfil;
+    return (
+      <div key={obtenerClaveUnicaPerfil(item)} className="card player-row">
+        <div className="player-info">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
+            {!esEspecialItem && dorsalItem && dorsalItem !== '0' && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{dorsalItem}</span>
+            )}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {item.nombre} {esUsuarioActual ? '(Tú)' : ''}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {esEspecialItem ? (
+                <TextoConSignoGenero texto={item.categoria || item.rol} />
+              ) : (
+                <>
+                  {item.rol} · <TextoConSignoGenero texto={item.categoria || 'Sin categoría'} />
+                  {edadItem ? ` · ${edadItem} años` : ''}
+                </>
+              )}
+            </div>
+            {puedeVerTelefonosPrivados && !esEspecialItem && telefonoItem && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginTop: 2 }}>
+                <a href={`tel:${telefonoItem}`} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Phone size={12} /> {telefonoItem}
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+        {isAdmin && (
+          <button className="btn-danger" onClick={() => handleDelete('perfiles', item.id)}>
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const perfilesEspecialesCreados = deduplicarPerfilesLista(
+    perfilesClub.filter((p) => p.esReservaDirectiva || esRolSinDorsal(p.rol))
+  );
+
+  if (!sesionIniciada) {
+    return (
+      <div>
+        <header className="header">
+          <div className="header-title">
+            {escudoCargado ? (
+              <img
+                src="/escudo.png"
+                alt="Escudo C.D. Rafael Altamira"
+                className="escudo-img"
+                onError={() => setEscudoCargado(false)}
+              />
+            ) : (
+              <div className="badge-escudo">CDRA</div>
+            )}
+            <div>
+              <h1>C.D. Rafael Altamira</h1>
+              <p>Picanya Fútbol Sala · Acceso del Club</p>
+            </div>
+          </div>
+        </header>
+
+        <main className="container">
+          {!modoRegistroJugador ? (
+            <form className="card" onSubmit={handleIniciarSesion} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+              <div className="section-title">
+                <Lock size={19} /> Iniciar Sesión
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.4 }}>
+                Entra con tu <strong>nombre o seudónimo</strong> y tu <strong>contraseña / PIN</strong> (o usa el PIN inicial <strong>1234</strong> para configurar un perfil nuevo).
+              </p>
+              <input
+                type="text"
+                placeholder="Nombre o seudónimo *"
+                style={{ width: '100%', padding: 11, borderRadius: 8, border: '1px solid var(--border)', fontSize: 15 }}
+                value={identificadorLoginInput}
+                onChange={(e) => setIdentificadorLoginInput(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Contraseña o PIN * (inicio: 1234)"
+                style={{ width: '100%', padding: 11, borderRadius: 8, border: '1px solid var(--border)', fontSize: 15 }}
+                value={pinLoginInput}
+                onChange={(e) => setPinLoginInput(e.target.value)}
+                required
+              />
+              <button type="submit" className="btn-primary">Entrar</button>
+              <button
+                type="button"
+                className="btn-rsvp"
+                style={{ justifyContent: 'center', marginTop: 4 }}
+                onClick={() => {
+                  setModoRegistroJugador(true);
+                  setFormNombre('');
+                  setFormDorsal('');
+                  setFormCategoria('');
+                  setFormTelefono('');
+                  setFormEdad('');
+                  setFormFoto('');
+                  setFormPinNuevo('');
+                  setFormPinConfirm('');
+                }}
+              >
+                <UserPlus size={14} /> Registrarse como Jugador
+              </button>
+            </form>
+          ) : (
+            <form className="card" onSubmit={handleGuardarConfiguracionObligatoria} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+              <div className="section-title">
+                <UserPlus size={19} /> Registro de Jugador
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                Los campos con * son obligatorios. La foto es <strong>opcional</strong>. Tu teléfono solo será visible para Directiva y entrenadores.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+                <AvatarCircular
+                  src={formFoto}
+                  alt="Vista previa"
+                  letra={formNombre?.[0] || 'J'}
+                  tamano={72}
+                />
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Dorsal: #{formDorsal || '-'}
+                </div>
+                <label className="btn-primary" style={{ cursor: 'pointer' }}>
+                  <Camera size={15} /> Subir foto (opcional)
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setFormFoto(dataUrl))}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Nombre o seudónimo *</label>
+                <input
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Ej. Dani o Daniel López *"
+                  value={formNombre}
+                  onChange={(e) => setFormNombre(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Número de dorsal *</label>
+                <input
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Ej. 10 *"
+                  value={formDorsal}
+                  onChange={(e) => setFormDorsal(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Edad *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Ej. 16 *"
+                  value={formEdad}
+                  onChange={(e) => setFormEdad(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Teléfono de contacto (ficha del club) *</label>
+                <input
+                  type="tel"
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Ej. 600123456 *"
+                  value={formTelefono}
+                  onChange={(e) => setFormTelefono(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+                <SelectorCategoriaYGenero
+                  valorActual={formCategoria}
+                  onChangeValor={(val) => setFormCategoria(val)}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Contraseña / PIN personal (mín. 4 caracteres) *</label>
+                <input
+                  type="password"
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Tu contraseña o PIN *"
+                  value={formPinNuevo}
+                  onChange={(e) => setFormPinNuevo(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Confirmar contraseña / PIN *</label>
+                <input
+                  type="password"
+                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  placeholder="Repite tu contraseña o PIN *"
+                  value={formPinConfirm}
+                  onChange={(e) => setFormPinConfirm(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn-primary">Completar Registro y Entrar</button>
+              <button
+                type="button"
+                className="btn-rsvp"
+                style={{ justifyContent: 'center' }}
+                onClick={() => setModoRegistroJugador(false)}
+              >
+                Volver a Iniciar Sesión
+              </button>
+            </form>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  if (forzarOnboarding || (!sinDorsalUsuarioActual && !perfilJugadorCompleto(perfil))) {
+    const editandoEspecial = esRolSinDorsal(formRol);
+    return (
+      <div>
+        <header className="header">
+          <div className="header-title">
+            {escudoCargado ? (
+              <img
+                src="/escudo.png"
+                alt="Escudo C.D. Rafael Altamira"
+                className="escudo-img"
+                onError={() => setEscudoCargado(false)}
+              />
+            ) : (
+              <div className="badge-escudo">CDRA</div>
+            )}
+            <div>
+              <h1>C.D. Rafael Altamira</h1>
+              <p>{editandoEspecial ? `Perfil de ${formRol}` : 'Configuración del jugador'}</p>
+            </div>
+          </div>
+          <button type="button" className="admin-btn" onClick={handleCerrarSesion}>
+            <LogOut size={14} /> Salir
+          </button>
+        </header>
+
+        <main className="container">
+          <form className="card" onSubmit={handleGuardarConfiguracionObligatoria} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <div className="section-title">
+              <KeyRound size={19} /> {editandoEspecial ? `Editar Perfil (${formRol})` : 'Completa tu Perfil de Jugador'}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+              <AvatarCircular
+                src={formFoto}
+                alt="Vista previa"
+                letra={formNombre?.[0] || 'U'}
+                tamano={72}
+              />
+              {!editandoEspecial && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Dorsal: #{formDorsal || '-'}
+                </div>
+              )}
+              <label className="btn-primary" style={{ cursor: 'pointer' }}>
+                <Camera size={15} /> Subir foto (opcional)
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setFormFoto(dataUrl))}
+                />
+              </label>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Nombre o seudónimo *</label>
+              <input
+                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                placeholder="Nombre o seudónimo *"
+                value={formNombre}
+                onChange={(e) => setFormNombre(e.target.value)}
+                required
+              />
+            </div>
+
+            {!editandoEspecial && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Número de dorsal *</label>
+                  <input
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    placeholder="Ej. 10 *"
+                    value={formDorsal}
+                    onChange={(e) => setFormDorsal(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Edad *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    placeholder="Ej. 16 *"
+                    value={formEdad}
+                    onChange={(e) => setFormEdad(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Teléfono de contacto (ficha del club) *</label>
+                  <input
+                    type="tel"
+                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    placeholder="Ej. 600123456 *"
+                    value={formTelefono}
+                    onChange={(e) => setFormTelefono(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+                  <SelectorCategoriaYGenero
+                    valorActual={formCategoria}
+                    onChangeValor={(val) => setFormCategoria(val)}
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Contraseña / PIN personal (mín. 4, distinto de 1234) *</label>
+              <input
+                type="password"
+                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                placeholder="Nueva contraseña o PIN *"
+                value={formPinNuevo}
+                onChange={(e) => setFormPinNuevo(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Confirmar contraseña / PIN *</label>
+              <input
+                type="password"
+                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                placeholder="Repite tu contraseña o PIN *"
+                value={formPinConfirm}
+                onChange={(e) => setFormPinConfirm(e.target.value)}
+                required
+              />
+            </div>
+
+            <button type="submit" className="btn-primary">Guardar y Entrar a la App</button>
+          </form>
+        </main>
+      </div>
+    );
+  }
+
+  const dorsalCabecera = String(perfil?.dorsal || '').trim();
+  const mostrarDorsalCabecera = !sinDorsalUsuarioActual && dorsalCabecera !== '' && dorsalCabecera !== '0';
+
+  return (
+    <div>
+      <header className="header">
+        <div className="header-title">
+          {escudoCargado ? (
+            <img
+              src="/escudo.png"
+              alt="Escudo C.D. Rafael Altamira"
+              className="escudo-img"
+              onError={() => setEscudoCargado(false)}
+            />
+          ) : (
+            <div className="badge-escudo">CDRA</div>
+          )}
+          <div>
+            <h1>C.D. Rafael Altamira</h1>
+            <p>
+              {perfil.nombre}
+              {mostrarDorsalCabecera ? ` · #${dorsalCabecera}` : ` · ${perfil.rol}`}
+            </p>
+          </div>
+        </div>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="admin-btn"
+            title="Forzar actualización desde Firebase"
+            onClick={() => cargarDatosUnaVez(true, true)}
+            disabled={refrescandoDatos}
+          >
+            <RefreshCw size={14} /> {refrescandoDatos ? '...' : 'Sync'}
+          </button>
+          <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+            <User size={14} /> Perfil
+          </button>
+          <button className={`admin-btn ${isAdmin ? 'active' : ''}`} onClick={toggleAdmin}>
+            {isAdmin ? <Unlock size={14} /> : <Lock size={14} />}
+            {isAdmin ? 'Directiva' : 'PIN'}
+          </button>
+        </div>
+      </header>
+
+      <main className="container">
+        {alertaAvisoEntrante && (
+          <div
+            className="card"
+            style={{
+              border: alertaAvisoEntrante.urgente ? '2px solid var(--danger)' : '2px solid var(--primary)',
+              background: alertaAvisoEntrante.urgente ? '#fef2f2' : '#eff6ff',
+              marginBottom: 12
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span className={`tag ${alertaAvisoEntrante.urgente ? 'urgent' : ''}`}>
+                {alertaAvisoEntrante.urgente ? '🚨 Aviso Urgente' : '🔔 Nuevo Aviso del Club'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAlertaAvisoEntrante(null)}
+                style={{ background: 'none', border: 'none', fontWeight: 700, cursor: 'pointer', color: '#475569' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{alertaAvisoEntrante.titulo}</div>
+            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.4 }}>{alertaAvisoEntrante.mensaje}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+              Publicado por {alertaAvisoEntrante.autor}
+            </div>
+          </div>
+        )}
+
+        {tab === 'partidos' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Calendar size={19} /> Partidos y Asistencia</h2>
+              {isAdmin && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={handleLimpiarDuplicadosPartidos}
+                  >
+                    <CopyX size={14} /> Limpiar duplicados
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={handleLimpiarPartidosSinRival}
+                  >
+                    <Trash2 size={14} /> Limpiar fechas
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => {
+                      setShowImportBox(!showImportBox);
+                      setShowForm(false);
+                    }}
+                  >
+                    <Download size={14} /> Importar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setShowForm(!showForm);
+                      setShowImportBox(false);
+                    }}
+                  >
+                    <Plus size={15} /> Partido
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="subtabs">
+              <button
+                type="button"
+                className={`subtab ${partidosSubtab === 'proximos' ? 'active' : ''}`}
+                onClick={() => setPartidosSubtab('proximos')}
+              >
+                Próximos ({partidosProximos.length})
+              </button>
+              <button
+                type="button"
+                className={`subtab ${partidosSubtab === 'jugados' ? 'active' : ''}`}
+                onClick={() => setPartidosSubtab('jugados')}
+              >
+                Jugados ({partidosJugados.length})
+              </button>
+            </div>
+
+            {isAdmin && showImportBox && (
+              <div className="form-box">
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                  Sincronizar webs o importar texto (sin duplicados)
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--muted)' }}>
+                    Webs configuradas ({urlsSincronizacion.length})
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      type="url"
+                      placeholder="Añadir otra URL (https://...)"
+                      value={nuevaUrlInput}
+                      onChange={(e) => setNuevaUrlInput(e.target.value)}
+                    />
+                    <button type="button" className="btn-rsvp" onClick={handleAgregarUrlSincronizacion}>
+                      + Web
+                    </button>
+                  </div>
+
+                  {urlsSincronizacion.map((u) => (
+                    <div
+                      key={u}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: '#ffffff',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        fontSize: 12
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u}</span>
+                      <button type="button" className="btn-danger" onClick={() => handleQuitarUrlSincronizacion(u)}>
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={sincronizandoUrls}
+                    onClick={handleSincronizarUrls}
+                  >
+                    <Download size={15} />
+                    {sincronizandoUrls ? 'Sincronizando webs...' : 'Sincronizar webs ahora'}
+                  </button>
+                </div>
+
+                <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                  <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                    Pega aquí las jornadas o enfrentamientos de El balón de la Comunitat, Futbuteo o FFCV y se añadirán sin duplicar:
+                  </p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-rsvp"
+                      onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FFCV)}
+                    >
+                      Cargar muestra FFCV Altamira
+                    </button>
+                  </div>
+                  <textarea
+                    rows="5"
+                    placeholder={`Ejemplo:\nJornada 10 (29-11-2026)\nC.D. Rafael Altamira Picanya "A" - Maristas Cullera`}
+                    value={textoImportarPartidos}
+                    onChange={(e) => setTextoImportarPartidos(e.target.value)}
+                    required
+                  />
+                  <button type="submit" className="btn-rsvp" style={{ justifyContent: 'center' }}>
+                    <Download size={14} /> Añadir partidos pegados
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {isAdmin && showForm && (
+              <form className="form-box" onSubmit={handleAddPartido}>
+                <SelectorCategoriaYGenero
+                  valorActual={nuevoPartido.categoria}
+                  onChangeValor={(val) => setNuevoPartido({ ...nuevoPartido, categoria: val })}
+                />
+                <input placeholder="Local" value={nuevoPartido.local} onChange={(e) => setNuevoPartido({ ...nuevoPartido, local: e.target.value })} />
+                <input placeholder="Visitante *" required value={nuevoPartido.visitante} onChange={(e) => setNuevoPartido({ ...nuevoPartido, visitante: e.target.value })} />
+                <input placeholder="Día y Hora (Sábado 18:30)" value={nuevoPartido.fecha} onChange={(e) => setNuevoPartido({ ...nuevoPartido, fecha: e.target.value })} />
+                <input placeholder="Pabellón" value={nuevoPartido.pabellon} onChange={(e) => setNuevoPartido({ ...nuevoPartido, pabellon: e.target.value })} />
+                <input placeholder="Resultado (o VS)" value={nuevoPartido.resultado} onChange={(e) => setNuevoPartido({ ...nuevoPartido, resultado: e.target.value })} />
+                <button type="submit" className="btn-primary">Guardar Partido</button>
+              </form>
+            )}
+
+            {partidosSubtab === 'proximos' && (
+              <div>
+                {partidosProximos.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    No hay próximos partidos programados por ahora.
+                  </div>
+                ) : (
+                  partidosProximos.map((p) => renderTarjetaPartido(p, false))
+                )}
+              </div>
+            )}
+
+            {partidosSubtab === 'jugados' && (
+              <div>
+                {partidosJugados.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Aún no hay partidos jugados registrados.
+                  </div>
+                ) : (
+                  partidosJugados.map((p) => renderTarjetaPartido(p, true))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'liga' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Trophy size={19} /> Clasificación y Goles</h2>
+              {isAdmin && ligaSubtab === 'tabla' && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={handleLimpiarTablaCompleta}
+                  >
+                    <Trash2 size={14} /> Limpiar tabla
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => {
+                      setShowImportTablaBox(!showImportTablaBox);
+                      setShowForm(false);
+                    }}
+                  >
+                    <Download size={14} /> Importar tabla
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setShowForm(!showForm);
+                      setShowImportTablaBox(false);
+                    }}
+                  >
+                    <Plus size={15} /> Equipo
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="subtabs">
+              <button className={`subtab ${ligaSubtab === 'tabla' ? 'active' : ''}`} onClick={() => setLigaSubtab('tabla')}>
+                Tabla de Liga
+              </button>
+              <button className={`subtab ${ligaSubtab === 'goles' ? 'active' : ''}`} onClick={() => setLigaSubtab('goles')}>
+                Pichichi / Goles
+              </button>
+            </div>
+
+            {ligaSubtab === 'tabla' && (
+              <>
+                {isAdmin && showImportTablaBox && (
+                  <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                      Importar clasificación completa (sin duplicados)
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                      Pega aquí las filas con columnas (# Equipo Pts PJ PG PE PP GF GC Dif) o el texto de clasificación:
+                    </p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn-rsvp"
+                        onClick={() => setTextoImportarClasificacion(TEXTO_MUESTRA_CLASIFICACION)}
+                      >
+                        Cargar muestra clasificación
+                      </button>
+                    </div>
+                    <textarea
+                      rows="6"
+                      placeholder={`Ejemplo:\n1\tC.D. Corbera\t25\t9\t8\t1\t0\t59\t10\t+49`}
+                      value={textoImportarClasificacion}
+                      onChange={(e) => setTextoImportarClasificacion(e.target.value)}
+                      required
+                    />
+                    <button type="submit" className="btn-primary">
+                      <Download size={15} /> Añadir clasificación sin duplicados
+                    </button>
+                  </form>
+                )}
+
+                {isAdmin && showForm && (
+                  <form className="form-box" onSubmit={handleAddEquipoTabla}>
+                    <input placeholder="Nombre del equipo *" required value={nuevoEquipoTabla.equipo} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, equipo: e.target.value })} />
+                    <input type="number" placeholder="Puntos (Pts)" value={nuevoEquipoTabla.pts} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pts: e.target.value })} />
+                    <input type="number" placeholder="Partidos Jugados (PJ)" value={nuevoEquipoTabla.pj} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pj: e.target.value })} />
+                    <input type="number" placeholder="Ganados (PG)" value={nuevoEquipoTabla.pg} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pg: e.target.value })} />
+                    <input type="number" placeholder="Empatados (PE)" value={nuevoEquipoTabla.pe} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pe: e.target.value })} />
+                    <input type="number" placeholder="Perdidos (PP)" value={nuevoEquipoTabla.pp} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pp: e.target.value })} />
+                    <input type="number" placeholder="Goles a Favor (GF)" value={nuevoEquipoTabla.gf} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gf: e.target.value })} />
+                    <input type="number" placeholder="Goles en Contra (GC)" value={nuevoEquipoTabla.gc} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gc: e.target.value })} />
+                    <button type="submit" className="btn-primary">Añadir a la tabla</button>
+                  </form>
+                )}
+
+                <div
+                  className="card table-wrap"
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    overflowX: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                    padding: '4px 2px'
+                  }}
+                >
+                  <table
+                    style={{
+                      width: '100%',
+                      minWidth: '520px',
+                      borderCollapse: 'collapse',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>#</th>
+                        <th style={{ padding: '8px 6px', whiteSpace: 'nowrap', textAlign: 'left', minWidth: '145px' }}>Equipo</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>Pts</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PJ</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PG</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PE</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PP</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>GF</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>GC</th>
+                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>Dif</th>
+                        {isAdmin && <th style={{ padding: '8px 4px', whiteSpace: 'nowrap', textAlign: 'center' }}></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clasificacion.map((c, idx) => {
+                        const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
+                        const gf = Number(c.gf || 0);
+                        const gc = Number(c.gc || 0);
+                        const dif = calcularDifClasificacion(gf, gc, c.dif);
+                        return (
+                          <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700 }}>
+                              {c.pos || idx + 1}
+                            </td>
+                            <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'left', maxWidth: '185px' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  maxWidth: '100%',
+                                  verticalAlign: 'middle'
+                                }}
+                              >
+                                <AvatarCircular
+                                  src={c.escudo}
+                                  alt={nombreLimpio}
+                                  letra={nombreLimpio?.[0] || 'E'}
+                                  tamano={24}
+                                />
+                                <span
+                                  title={nombreLimpio}
+                                  style={{
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    display: 'inline-block'
+                                  }}
+                                >
+                                  {nombreLimpio}
+                                </span>
+                                {isAdmin && (
+                                  <label
+                                    title="Subir escudo del equipo"
+                                    style={{
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      padding: 3,
+                                      borderRadius: 6,
+                                      border: '1px solid var(--border)',
+                                      background: '#fff',
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    <Camera size={11} />
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      style={{ display: 'none' }}
+                                      onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <strong style={{ color: 'var(--primary)' }}>{c.pts ?? 0}</strong>
+                            </td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pj ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pg ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pe ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pp ?? 0}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{gf}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{gc}</td>
+                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700 }}>
+                              {formatearDif(dif)}
+                            </td>
+                            {isAdmin && (
+                              <td style={{ padding: '8px 4px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
+                                <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {ligaSubtab === 'goles' && (
+              <div>
+                {goleadoresOrdenados.map((j, idx) => (
+                  <div key={j.id} className="card player-row">
+                    <div className="player-info">
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                        <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
+                        {j.dorsal && j.dorsal !== '0' && (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>
+                          {idx + 1}º · {j.nombre}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          <TextoConSignoGenero texto={j.categoria} />
+                          {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="tag result"><Award size={12} style={{ verticalAlign: 'middle' }} /> {j.goles || 0}</span>
+                      {puedeGestionarAlaYGoles && (
+                        <>
+                          <button className="btn-rsvp" onClick={() => sumarGol(j, -1)}>-</button>
+                          <button className="btn-rsvp yes" onClick={() => sumarGol(j, 1)}>+</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'plantilla' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Shield size={19} /> Equipos y Plantilla</h2>
+              {isAdmin && (
+                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                  <Plus size={15} /> Jugador
+                </button>
+              )}
+            </div>
+
+            {isAdmin && showForm && (
+              <form className="form-box" onSubmit={handleAddJugador}>
+                <input
+                  placeholder="Dorsal / Número (ej. 10) *"
+                  required
+                  value={nuevoJugador.dorsal}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, dorsal: e.target.value })}
+                />
+                <input
+                  placeholder="Nombre del jugador *"
+                  required
+                  value={nuevoJugador.nombre}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })}
+                />
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  placeholder="Edad del jugador (ej. 16) *"
+                  required
+                  value={nuevoJugador.edad}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, edad: e.target.value })}
+                />
+                <input
+                  type="tel"
+                  placeholder="Teléfono del jugador (ficha del club) *"
+                  required
+                  value={nuevoJugador.telefono}
+                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, telefono: e.target.value })}
+                />
+                {puedeGestionarAlaYGoles && (
+                  <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
+                    <option value="Portero">Portero</option>
+                    <option value="Cierre">Cierre</option>
+                    <option value="Ala">Ala</option>
+                    <option value="Pívot">Pívot</option>
+                    <option value="Entrenador">Entrenador</option>
+                  </select>
+                )}
+                <SelectorCategoriaYGenero
+                  valorActual={nuevoJugador.categoria}
+                  onChangeValor={(val) => setNuevoJugador({ ...nuevoJugador, categoria: val })}
+                />
+                {puedeGestionarAlaYGoles && (
+                  <input
+                    type="number"
+                    placeholder="Goles iniciales"
+                    value={nuevoJugador.goles}
+                    onChange={(e) => setNuevoJugador({ ...nuevoJugador, goles: e.target.value })}
+                  />
+                )}
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Foto del jugador (opcional):
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setNuevoJugador({ ...nuevoJugador, foto: dataUrl }))}
+                  />
+                </label>
+                <button type="submit" className="btn-primary">Guardar Jugador</button>
+              </form>
+            )}
+
+            {plantilla.map((j) => {
+              const telJugador = limpiarTelefono(j.telefono || '');
+              const edadJugador = normalizarEdad(j.edad || '');
+              return (
+                <div key={j.id} className="card player-row">
+                  <div className="player-info">
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
+                      {j.dorsal && j.dorsal !== '0' && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        <TextoConSignoGenero texto={j.categoria} />
+                        {edadJugador ? ` · ${edadJugador} años` : ''}
+                        {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
+                        {puedeGestionarAlaYGoles ? ` · ${j.goles || 0} goles` : ''}
+                      </div>
+                      {puedeVerTelefonosPrivados && telJugador && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginTop: 2 }}>
+                          <a href={`tel:${telJugador}`} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Phone size={12} /> {telJugador}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <button className="btn-danger" onClick={() => handleDelete('plantilla', j.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === 'avisos' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><Bell size={19} /> Club y Avisos</h2>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {permisoNotifMovil !== 'granted' && (
+                  <button type="button" className="btn-rsvp" onClick={solicitarPermisoNotificacionesMovil}>
+                    <Bell size={14} /> Activar alertas móvil
+                  </button>
+                )}
+                {puedePublicarAvisos && avisosSubtab === 'avisos' && (
+                  <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                    <Plus size={15} /> Aviso
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="subtabs">
+              <button className={`subtab ${avisosSubtab === 'avisos' ? 'active' : ''}`} onClick={() => setAvisosSubtab('avisos')}>
+                Avisos
+              </button>
+              <button className={`subtab ${avisosSubtab === 'pistas' ? 'active' : ''}`} onClick={() => setAvisosSubtab('pistas')}>
+                Pabellones, Horarios y Redes
+              </button>
+            </div>
+
+            {avisosSubtab === 'avisos' && (
+              <>
+                {puedePublicarAvisos && showForm && (
+                  <form className="form-box" onSubmit={handleAddAviso}>
+                    <input placeholder="Título del aviso *" required value={nuevoAviso.titulo} onChange={(e) => setNuevoAviso({ ...nuevoAviso, titulo: e.target.value })} />
+                    <textarea rows="3" placeholder="Mensaje para jugadores y familias *" required value={nuevoAviso.mensaje} onChange={(e) => setNuevoAviso({ ...nuevoAviso, mensaje: e.target.value })} />
+                    <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" style={{ width: 'auto' }} checked={nuevoAviso.urgente} onChange={(e) => setNuevoAviso({ ...nuevoAviso, urgente: e.target.checked })} />
+                      Marcar como Urgente
+                    </label>
+                    <button type="submit" className="btn-primary">Publicar Aviso</button>
+                  </form>
+                )}
+
+                {avisos.map((a) => (
+                  <div key={a.id} className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span className={`tag ${a.urgente ? 'urgent' : ''}`}>
+                        {a.urgente ? 'Urgente' : 'Comunicado'}
+                      </span>
+                      {isAdmin && (
+                        <button className="btn-danger" onClick={() => handleDelete('avisos', a.id)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{a.titulo}</h3>
+                    <p style={{ fontSize: 14, color: '#334155', lineHeight: 1.45 }}>{a.mensaje}</p>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {avisosSubtab === 'pistas' && (
+              <div>
+                <div className="card">
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                    Redes Sociales del Club
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                    Sigue toda la actividad, fotos y resultados oficiales
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {REDES_SOCIALES_CLUB.map((red) => (
+                      <a
+                        key={red.nombre}
+                        href={red.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-primary"
+                        style={{
+                          textDecoration: 'none',
+                          justifyContent: 'space-between',
+                          background: red.color
+                        }}
+                      >
+                        <span>
+                          <TextoConSignoGenero texto={red.nombre} />
+                        </span>
+                        <ExternalLink size={14} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
+                {PABELLONES.map((pb) => (
+                  <div key={pb.nombre} className="card">
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{pb.nombre}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{pb.zona}</div>
+                    <a
+                      href={pb.mapa}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-primary"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <Navigation size={14} /> Abrir en Maps
+                    </a>
+                  </div>
+                ))}
+
+                {ENTRENOS.map((en) => (
+                  <div key={en.categoria} className="card">
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>
+                      <TextoConSignoGenero texto={en.categoria} />
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{en.dias}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'perfil' && (
+          <div>
+            <div className="section-header">
+              <h2 className="section-title"><User size={19} /> Perfiles del Club</h2>
+              <button type="button" className="btn-rsvp" onClick={handleCerrarSesion}>
+                <LogOut size={13} /> Cerrar sesión
+              </button>
+            </div>
+
+            <div className="subtabs">
+              <button className={`subtab ${perfilSubtab === 'mi-perfil' ? 'active' : ''}`} onClick={() => setPerfilSubtab('mi-perfil')}>
+                Mi Perfil
+              </button>
+              <button className={`subtab ${perfilSubtab === 'companeros' ? 'active' : ''}`} onClick={() => setPerfilSubtab('companeros')}>
+                Perfiles ({totalPerfilesVisibles})
+              </button>
+            </div>
+
+            {perfilSubtab === 'mi-perfil' && (
+              <>
+                <TarjetaMiPerfil
+                  perfil={perfil}
+                  sinDorsalUsuarioActual={sinDorsalUsuarioActual}
+                  handleAbrirEditarPerfil={handleAbrirEditarPerfil}
+                />
+
+                {isAdmin && (
+                  <form className="card" onSubmit={handleCrearPerfilEspecialDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="section-title" style={{ fontSize: 15 }}>
+                      <UserPlus size={17} /> Entrenador y 2º Entrenador ({perfilesEspecialesCreados.length}/{MAX_PERFILES_ESPECIALES_DIRECTIVA})
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      No llevan dorsal; su rol y categoría es Entrenador o 2º Entrenador.
+                    </p>
+                    <select
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.rolEspecial}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, rolEspecial: e.target.value })}
+                    >
+                      {ROLES_ESPECIALES_DIRECTIVA.map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      placeholder="Nombre o seudónimo *"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.nombre}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, nombre: e.target.value })}
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Contraseña o PIN (mín. 4 caracteres) *"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={nuevoPerfilEspecial.pinUsuario}
+                      onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, pinUsuario: e.target.value })}
+                      required
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <AvatarCircular
+                        src={nuevoPerfilEspecial.foto}
+                        alt="Foto perfil especial"
+                        letra={nuevoPerfilEspecial.nombre?.[0] || 'E'}
+                        tamano={48}
+                      />
+                      <label className="btn-rsvp" style={{ cursor: 'pointer' }}>
+                        <Camera size={14} /> Foto (opcional)
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) =>
+                            procesarFotoCircular(e.target.files[0], (dataUrl) =>
+                              setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, foto: dataUrl })
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                    <button type="submit" className="btn-primary">Crear Perfil sin Dorsal</button>
+                  </form>
+                )}
+
+                {isAdmin && (
+                  <form className="card" onSubmit={handleCambiarPinDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="section-title" style={{ fontSize: 15 }}>
+                      <KeyRound size={17} /> Cambiar PIN de Directiva
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="PIN actual de directiva"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={pinDirActualInput}
+                      onChange={(e) => setPinDirActualInput(e.target.value)}
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Nuevo PIN de directiva (mín. 4 caracteres)"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={pinDirNuevoInput}
+                      onChange={(e) => setPinDirNuevoInput(e.target.value)}
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Confirmar nuevo PIN de directiva"
+                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      value={pinDirConfirmInput}
+                      onChange={(e) => setPinDirConfirmInput(e.target.value)}
+                      required
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="submit" className="btn-primary" style={{ flex: 1 }}>Actualizar PIN Directiva</button>
+                      <button type="button" className="btn-rsvp" onClick={handleRestablecerPinDirectiva}>Restablecer 1980</button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+
+            {perfilSubtab === 'companeros' && (
+              <div>
+                {totalPerfilesVisibles === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Aún no hay perfiles completados en el club.
+                  </div>
+                ) : (
+                  <>
+                    {directivasVisibles.map((item) => renderFilaPerfil(item))}
+                    {entrenadoresVisibles.map((item) => renderFilaPerfil(item))}
+
+                    <div className="subtabs" style={{ marginTop: 14 }}>
+                      <button
+                        type="button"
+                        className={`subtab ${generoPerfilesTab === 'masculina' ? 'active' : ''}`}
+                        onClick={() => setGeneroPerfilesTab('masculina')}
+                      >
+                        Plantilla masculina ({usuariosMasculinosOrdenados.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`subtab ${generoPerfilesTab === 'femenina' ? 'active' : ''}`}
+                        onClick={() => setGeneroPerfilesTab('femenina')}
+                      >
+                        Plantilla femenina ({usuariosFemeninosOrdenados.length})
+                      </button>
+                    </div>
+
+                    {usuariosPorGeneroActual.length === 0 ? (
+                      <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                        No hay usuarios en {generoPerfilesTab === 'femenina' ? 'plantilla femenina' : 'plantilla masculina'}.
+                      </div>
+                    ) : (
+                      usuariosPorGeneroActual.map((item) => renderFilaPerfil(item))
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="status-pill">
+          {firebaseOk ? '● Sincronizado con Firebase' : '○ Modo local activo'} · Creado por {NOMBRE_CREADOR_APP}
+        </div>
+      </main>
+
+      <nav className="bottom-nav">
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+          <Calendar size={20} />
+          <span>Partidos</span>
+        </button>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+          <Trophy size={20} />
+          <span>Liga/Goles</span>
+        </button>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+          <Users size={20} />
+          <span>Plantilla</span>
+        </button>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+          <Bell size={20} />
+          <span>Avisos</span>
+        </button>
+      </nav>
+    </div>
+  );
+}
