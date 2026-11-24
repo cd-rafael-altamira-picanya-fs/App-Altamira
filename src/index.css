@@ -12,23 +12,17 @@
   --azul-genero: #2563eb;
 }
 
-*,
-*::before,
-*::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  max-width: 100%;
 }
 
 html,
 body {
   overflow-x: hidden;
-  overflow-x: clip;
-  overscroll-behavior-x: none;
   max-width: 100%;
-  width: 100%;
 }
 
 body {
@@ -45,9 +39,8 @@ body {
   background-attachment: fixed;
   background-size: cover;
   color: var(--text);
-  padding-bottom: 128px;
+  padding-bottom: 100px;
   min-height: 100vh;
-  touch-action: pan-y pinch-zoom;
 }
 
 .signo-mujer {
@@ -107,7 +100,7 @@ body {
 .header {
   background: linear-gradient(135deg, var(--primary) 0%, #1e3a8a 100%);
   color: white;
-  padding: 12px 16px;
+  padding: 16px;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -115,8 +108,6 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  overflow: hidden;
 }
 
 .header-title {
@@ -124,13 +115,6 @@ body {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-.header-title > div {
-  min-width: 0;
-  overflow: hidden;
 }
 
 .header-actions {
@@ -167,27 +151,24 @@ body {
 .header h1 {
   font-size: 15px;
   font-weight: 800;
-  line-height: 1.15;
 }
 
 .header p {
   font-size: 12px;
   opacity: 0.85;
-  line-height: 1.2;
 }
 
 .admin-btn {
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
   color: white;
-  padding: 6px 9px;
+  padding: 6px 10px;
   border-radius: 8px;
   font-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   cursor: pointer;
-  white-space: nowrap;
 }
 
 .admin-btn.active {
@@ -199,24 +180,18 @@ body {
 .container {
   max-width: 600px;
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  padding: 16px 16px 24px;
-  overflow-x: hidden;
-  overflow-x: clip;
+  margin: 0 auto;
+  padding: 16px;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
   margin-bottom: 14px;
   gap: 8px;
   background: rgba(255, 255, 255, 0.92);
-  padding: 10px 14px;
+  padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.65);
 }
@@ -228,21 +203,16 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
 }
 
 .subtabs {
   display: flex;
   gap: 8px;
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
   margin-bottom: 14px;
 }
 
 .subtab {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1;
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -262,17 +232,15 @@ body {
 .card {
   background: var(--card);
   border-radius: 14px;
-  padding: 15px 16px;
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
+  padding: 15px;
   margin-bottom: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
+  max-width: 100%;
 }
 
 .mi-perfil-card {
-  padding: 20px 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -467,7 +435,6 @@ img[alt*="Foto de perfil"] {
   background: rgba(241, 245, 249, 0.96);
   padding: 14px;
   border-radius: 12px;
-  width: 100%;
   margin-bottom: 16px;
   display: flex;
   flex-direction: column;
@@ -488,7 +455,6 @@ img[alt*="Foto de perfil"] {
 
 .table-wrap {
   overflow-x: auto;
-  width: 100%;
 }
 
 table {
@@ -560,12 +526,11 @@ td {
   bottom: 0;
   left: 0;
   right: 0;
-  width: 100%;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.97);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  padding: 10px 8px 36px;
+  padding: 8px 0 20px;
   z-index: 30;
 }
 
@@ -579,16 +544,12 @@ td {
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1;
   cursor: pointer;
 }
 
 .nav-item.active {
   color: var(--primary);
-  font-weight: 800;
-  background: rgba(15, 41, 74, 0.08);
-  border-radius: 10px;
 }
 
 .status-pill {
