@@ -23,6 +23,7 @@ html,
 body {
   overflow-x: hidden;
   overflow-x: clip;
+  overscroll-behavior-x: none;
   max-width: 100%;
   width: 100%;
 }
@@ -43,6 +44,7 @@ body {
   color: var(--text);
   padding-bottom: 128px;
   min-height: 100vh;
+  touch-action: pan-y pinch-zoom;
 }
 
 .signo-mujer {
