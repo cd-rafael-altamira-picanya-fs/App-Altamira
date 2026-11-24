@@ -30,7 +30,7 @@ body {
       #991b1b 16deg 24deg,
       #facc15 24deg 32deg
     );
-  background-attachment: fixed;
+  background-attachment: scroll;
   background-size: cover;
   color: var(--text);
   padding-bottom: 84px;
