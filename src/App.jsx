@@ -62,7 +62,7 @@ const REDES_SOCIALES_CLUB = [
     color: '#E1306C'
   },
   {
-    nombre: 'Instagram Femenino ♀',
+    nombre: 'Instagram Femenino',
     detalle: 'Sección femenina · C.D. Rafael Altamira',
     url: 'https://www.instagram.com/altamirapicanya2020?avpt=a2t3eDA5Y3F1d3li',
     color: '#db2777'
