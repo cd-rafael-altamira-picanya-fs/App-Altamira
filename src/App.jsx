@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { db } from './firebase';
 import {
   collection,
@@ -44,7 +44,6 @@ const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 const MAX_PARTIDOS_POR_IMPORTACION = 80;
 const MAX_EQUIPOS_CLASIFICACION = 60;
-const VENTANA_AVISO_URGENTE_PARTIDO_MS = 2 * 60 * 60 * 1000;
 const TTL_SINCRONIZACION_MS = 15 * 60 * 1000;
 
 const CATEGORIAS_BASE = [
@@ -95,6 +94,25 @@ const TEXTO_MUESTRA_CLASIFICACION = `#	Equipo	Pts	PJ	PG	PE	PP	GF	GC	Dif
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
 const REGEX_SOLO_JORNADA = /^jornada\s*\d+(\s*\([^)]*\))?$/i;
+
+function guardarLocalSeguro(clave, valor) {
+  try {
+    const serializado = typeof valor === 'string' ? valor : JSON.stringify(valor);
+    localStorage.setItem(clave, serializado);
+  } catch {
+    // Evita fallos si localStorage alcanza su límite o está restringido
+  }
+}
+
+function leerListaLocal(clave, respaldo) {
+  try {
+    const saved = localStorage.getItem(clave);
+    if (saved !== null) return JSON.parse(saved);
+  } catch {
+    // Ignorar error de lectura local
+  }
+  return respaldo;
+}
 
 function limpiarTelefono(tel) {
   return String(tel || '').replace(/[^\d+]/g, '').trim();
@@ -1194,7 +1212,6 @@ const ENTRENOS = [
   { categoria: 'Escuela / Base ♂ / ♀', dias: 'Martes y Jueves · 17:30 - 18:45' }
 ];
 
-// La foto es opcional en todos los perfiles de jugador
 function perfilJugadorCompleto(p) {
   if (!p) return false;
   if (esRolSinDorsal(p.rol)) {
@@ -1207,16 +1224,6 @@ function perfilJugadorCompleto(p) {
   const edadOk = Boolean(normalizarEdad(p.edad));
   const pinOk = Boolean(p.pinUsuario && String(p.pinUsuario).trim().length >= 4);
   return nombreOk && dorsalOk && categoriaOk && telefonoOk && edadOk && pinOk;
-}
-
-function leerListaLocal(clave, respaldo) {
-  try {
-    const saved = localStorage.getItem(clave);
-    if (saved !== null) return JSON.parse(saved);
-  } catch {
-    // Ignorar error de lectura local
-  }
-  return respaldo;
 }
 
 function deduplicarPerfilesLista(lista) {
@@ -1249,7 +1256,12 @@ export default function App() {
   const setTab = (nuevaTab) => {
     const segura = nuevaTab === 'chat' ? 'partidos' : nuevaTab;
     setTabState(segura);
-    localStorage.setItem('cdra_tab_activa', segura);
+    guardarLocalSeguro('cdra_tab_activa', segura);
+  };
+
+  const irAAvisosAlEntrar = () => {
+    setAvisosSubtab('avisos');
+    setTab('avisos');
   };
 
   const [partidosSubtab, setPartidosSubtab] = useState('proximos');
@@ -1282,7 +1294,6 @@ export default function App() {
   const avisosVistosRef = useRef(new Set());
   const inicializadoAvisosRef = useRef(false);
   const nombreUsuarioActualRef = useRef('');
-  const recordatoriosPartidoEnviadosRef = useRef(new Set(leerListaLocal('cdra_recordatorios_partido_enviados', [])));
 
   const [pinDirectiva, setPinDirectiva] = useState(() => {
     return localStorage.getItem('cdra_pin_directiva') || PIN_DIRECTIVA_INICIAL;
@@ -1374,11 +1385,11 @@ export default function App() {
     plantillaLenRef.current = plantilla.length;
   }, [partidos.length, clasificacion.length, plantilla.length]);
 
-  const dispararNotificacionMovilAviso = (avisoObj, etiquetaExtra = '') => {
+  const dispararNotificacionMovilAviso = (avisoObj) => {
     if (!avisoObj) return;
     setAlertaAvisoEntrante({
       id: avisoObj.id || `noti_${Date.now()}`,
-      titulo: etiquetaExtra ? `${etiquetaExtra} · ${avisoObj.titulo || 'Aviso urgente'}` : (avisoObj.titulo || 'Nuevo aviso del club'),
+      titulo: avisoObj.titulo || 'Nuevo aviso del club',
       mensaje: avisoObj.mensaje || '',
       urgente: Boolean(avisoObj.urgente),
       autor: avisoObj.autor || 'Directiva / Entrenador'
@@ -1387,10 +1398,7 @@ export default function App() {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
         const prefijo = avisoObj.urgente ? '🚨 URGENTE · ' : '🔔 ';
-        const tituloFinal = etiquetaExtra
-          ? `${prefijo}${etiquetaExtra}: ${avisoObj.titulo || 'Aviso urgente'}`
-          : `${prefijo}${avisoObj.titulo || 'Aviso C.D. Rafael Altamira'}`;
-        const noti = new Notification(tituloFinal, {
+        const noti = new Notification(`${prefijo}${avisoObj.titulo || 'Aviso C.D. Rafael Altamira'}`, {
           body: `${avisoObj.mensaje || ''}${avisoObj.autor ? ` (${avisoObj.autor})` : ''}`,
           icon: '/escudo.png',
           tag: avisoObj.id || `aviso_${Date.now()}`
@@ -1406,51 +1414,6 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (!sesionIniciada) return;
-
-    const comprobarRecordatorioUrgenteDosHorasAntes = () => {
-      const avisosUrgentes = (avisos || []).filter((a) => Boolean(a?.urgente));
-      if (avisosUrgentes.length === 0 || (partidos || []).length === 0) return;
-
-      const ahoraMs = Date.now();
-      let huboCambio = false;
-
-      for (const partido of partidos) {
-        if (esPartidoYaJugado(partido, ahoraMs)) continue;
-        const tsPartido = obtenerMarcaTiempoPartido(partido);
-        if (tsPartido === Number.MAX_SAFE_INTEGER) continue;
-
-        const tiempoRestanteMs = tsPartido - ahoraMs;
-        if (tiempoRestanteMs > 0 && tiempoRestanteMs <= VENTANA_AVISO_URGENTE_PARTIDO_MS) {
-          for (const avisoUrgente of avisosUrgentes) {
-            const claveRecordatorio = `${partido.id}__${avisoUrgente.id}`;
-            if (!recordatoriosPartidoEnviadosRef.current.has(claveRecordatorio)) {
-              recordatoriosPartidoEnviadosRef.current.add(claveRecordatorio);
-              huboCambio = true;
-              const rivalEtiqueta = esEquipoClubAltamira(partido.local)
-                ? partido.visitante
-                : partido.local;
-              const etiquetaPartido = `2h antes vs ${rivalEtiqueta || partido.categoria || 'Partido'}`;
-              dispararNotificacionMovilAviso(avisoUrgente, etiquetaPartido);
-            }
-          }
-        }
-      }
-
-      if (huboCambio) {
-        localStorage.setItem(
-          'cdra_recordatorios_partido_enviados',
-          JSON.stringify(Array.from(recordatoriosPartidoEnviadosRef.current))
-        );
-      }
-    };
-
-    comprobarRecordatorioUrgenteDosHorasAntes();
-    const intervalo = window.setInterval(comprobarRecordatorioUrgenteDosHorasAntes, 60 * 1000);
-    return () => window.clearInterval(intervalo);
-  }, [sesionIniciada, partidos, avisos]);
-
   const solicitarPermisoNotificacionesMovil = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       alert('Este navegador no soporta notificaciones nativas del sistema, pero verás las alertas destacadas dentro de la app.');
@@ -1461,7 +1424,7 @@ export default function App() {
       setPermisoNotifMovil(resultado);
       if (resultado === 'granted') {
         new Notification('C.D. Rafael Altamira', {
-          body: 'Notificaciones activadas. Te avisaremos cuando haya un aviso nuevo o un aviso urgente 2 horas antes de cada partido.',
+          body: 'Notificaciones activadas. Te avisaremos cuando haya un aviso nuevo.',
           icon: '/escudo.png'
         });
       } else if (resultado === 'denied') {
@@ -1474,28 +1437,28 @@ export default function App() {
 
   const guardarPartidosLocal = (lista) => {
     setPartidos(lista);
-    localStorage.setItem('cdra_partidos_local', JSON.stringify(lista));
+    guardarLocalSeguro('cdra_partidos_local', lista);
   };
 
   const guardarClasificacionLocal = (lista) => {
     setClasificacion(lista);
-    localStorage.setItem('cdra_clasificacion_local', JSON.stringify(lista));
+    guardarLocalSeguro('cdra_clasificacion_local', lista);
   };
 
   const guardarPlantillaLocal = (lista) => {
     setPlantilla(lista);
-    localStorage.setItem('cdra_plantilla_local', JSON.stringify(lista));
+    guardarLocalSeguro('cdra_plantilla_local', lista);
   };
 
   const guardarAvisosLocal = (lista) => {
     setAvisos(lista);
-    localStorage.setItem('cdra_avisos_local', JSON.stringify(lista));
+    guardarLocalSeguro('cdra_avisos_local', lista);
   };
 
   const guardarPerfilesLocal = (lista) => {
     const limpia = deduplicarPerfilesLista(lista);
     setPerfilesClub(limpia);
-    localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+    guardarLocalSeguro('cdra_perfiles_club', limpia);
   };
 
   const cargarPerfilesSiToca = useCallback(async (forzar = false) => {
@@ -1507,12 +1470,12 @@ export default function App() {
     try {
       const snapPerfiles = await getDocs(query(collection(db, 'perfiles'), limit(120)));
       setFirebaseOk(true);
-      localStorage.setItem('cdra_last_sync_perfiles_at', String(Date.now()));
+      guardarLocalSeguro('cdra_last_sync_perfiles_at', String(Date.now()));
       if (!snapPerfiles.empty) {
         const docsPerfiles = snapPerfiles.docs.map((d) => ({ id: d.id, ...d.data() }));
         const limpia = deduplicarPerfilesLista(docsPerfiles);
         setPerfilesClub(limpia);
-        localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+        guardarLocalSeguro('cdra_perfiles_club', limpia);
       }
     } catch {
       // Mantiene datos locales
@@ -1549,33 +1512,33 @@ export default function App() {
 
       setFirebaseOk(true);
       const ahoraSync = String(Date.now());
-      localStorage.setItem('cdra_last_sync_at', ahoraSync);
+      guardarLocalSeguro('cdra_last_sync_at', ahoraSync);
 
       if (!snapPartidos.empty) {
         const docsPartidos = snapPartidos.docs.map((d) => ({ id: d.id, ...d.data() }));
         setPartidos(docsPartidos);
-        localStorage.setItem('cdra_partidos_local', JSON.stringify(docsPartidos));
+        guardarLocalSeguro('cdra_partidos_local', docsPartidos);
       }
 
       if (!snapClasif.empty) {
         const docsClasif = snapClasif.docs.map((d) => ({ id: d.id, ...d.data() }));
         setClasificacion(docsClasif);
-        localStorage.setItem('cdra_clasificacion_local', JSON.stringify(docsClasif));
+        guardarLocalSeguro('cdra_clasificacion_local', docsClasif);
       }
 
       if (!snapPlantilla.empty) {
         const docsPlantilla = snapPlantilla.docs.map((d) => ({ id: d.id, ...d.data() }));
         setPlantilla(docsPlantilla);
-        localStorage.setItem('cdra_plantilla_local', JSON.stringify(docsPlantilla));
+        guardarLocalSeguro('cdra_plantilla_local', docsPlantilla);
       }
 
       if (snapPerfiles) {
-        localStorage.setItem('cdra_last_sync_perfiles_at', ahoraSync);
+        guardarLocalSeguro('cdra_last_sync_perfiles_at', ahoraSync);
         if (!snapPerfiles.empty) {
           const docsPerfiles = snapPerfiles.docs.map((d) => ({ id: d.id, ...d.data() }));
           const limpia = deduplicarPerfilesLista(docsPerfiles);
           setPerfilesClub(limpia);
-          localStorage.setItem('cdra_perfiles_club', JSON.stringify(limpia));
+          guardarLocalSeguro('cdra_perfiles_club', limpia);
         }
       }
     } catch {
@@ -1738,13 +1701,14 @@ export default function App() {
         esReservaDirectiva: false
       };
       setPerfil(perfilDir);
-      localStorage.setItem('cdra_perfil', JSON.stringify(perfilDir));
-      localStorage.setItem('cdra_sesion_activa', '1');
-      localStorage.setItem('cdra_admin_activa', '1');
+      guardarLocalSeguro('cdra_perfil', perfilDir);
+      guardarLocalSeguro('cdra_sesion_activa', '1');
+      guardarLocalSeguro('cdra_admin_activa', '1');
       setIsAdmin(true);
       setSesionIniciada(true);
       setForzarOnboarding(false);
       setPinLoginInput('');
+      irAAvisosAlEntrar();
       return;
     }
 
@@ -1777,8 +1741,8 @@ export default function App() {
       setFormFoto('');
       setFormPinNuevo('');
       setFormPinConfirm('');
-      localStorage.setItem('cdra_perfil', JSON.stringify(perfilInicial));
-      localStorage.setItem('cdra_sesion_activa', '1');
+      guardarLocalSeguro('cdra_perfil', perfilInicial);
+      guardarLocalSeguro('cdra_sesion_activa', '1');
       localStorage.removeItem('cdra_admin_activa');
       setIsAdmin(false);
       setSesionIniciada(true);
@@ -1817,10 +1781,10 @@ export default function App() {
           tipoSlot: coincidenciaIdentidad.tipoSlot || ''
         };
         setPerfil(perfilRecuperado);
-        localStorage.setItem('cdra_perfil', JSON.stringify(perfilRecuperado));
-        localStorage.setItem('cdra_sesion_activa', '1');
+        guardarLocalSeguro('cdra_perfil', perfilRecuperado);
+        guardarLocalSeguro('cdra_sesion_activa', '1');
         if (esDir) {
-          localStorage.setItem('cdra_admin_activa', '1');
+          guardarLocalSeguro('cdra_admin_activa', '1');
         } else {
           localStorage.removeItem('cdra_admin_activa');
         }
@@ -1829,6 +1793,9 @@ export default function App() {
         const completo = perfilJugadorCompleto(perfilRecuperado);
         setForzarOnboarding(!completo);
         setPinLoginInput('');
+        if (completo) {
+          irAAvisosAlEntrar();
+        }
         return;
       } else {
         alert('La contraseña o PIN no coincide con ese nombre o seudónimo.');
@@ -1839,7 +1806,6 @@ export default function App() {
     alert('No se encontró ese usuario. Puedes registrarte como jugador o usar el PIN inicial 1234.');
   };
 
-  // Foto opcional al guardar o editar perfil de jugador
   const handleGuardarConfiguracionObligatoria = async (e) => {
     e.preventDefault();
     const nombreLimpio = formNombre.trim();
@@ -1905,11 +1871,12 @@ export default function App() {
     };
 
     setPerfil(perfilActualizado);
-    localStorage.setItem('cdra_perfil', JSON.stringify(perfilActualizado));
-    localStorage.setItem('cdra_sesion_activa', '1');
+    guardarLocalSeguro('cdra_perfil', perfilActualizado);
+    guardarLocalSeguro('cdra_sesion_activa', '1');
     setForzarOnboarding(false);
     setModoRegistroJugador(false);
     setSesionIniciada(true);
+    irAAvisosAlEntrar();
     await sincronizarPerfilEnClub(perfilActualizado);
     alert('¡Perfil guardado correctamente!');
   };
@@ -2021,7 +1988,7 @@ export default function App() {
       return;
     }
     const nuevoPin = pinDirNuevoInput.trim();
-    localStorage.setItem('cdra_pin_directiva', nuevoPin);
+    guardarLocalSeguro('cdra_pin_directiva', nuevoPin);
     setPinDirectiva(nuevoPin);
     setPinDirActualInput('');
     setPinDirNuevoInput('');
@@ -2030,7 +1997,7 @@ export default function App() {
   };
 
   const handleRestablecerPinDirectiva = () => {
-    localStorage.setItem('cdra_pin_directiva', PIN_DIRECTIVA_INICIAL);
+    guardarLocalSeguro('cdra_pin_directiva', PIN_DIRECTIVA_INICIAL);
     setPinDirectiva(PIN_DIRECTIVA_INICIAL);
     setPinDirActualInput('');
     setPinDirNuevoInput('');
@@ -2090,7 +2057,7 @@ export default function App() {
           if (!snap.empty) {
             const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
             setAvisos(docs);
-            localStorage.setItem('cdra_avisos_local', JSON.stringify(docs));
+            guardarLocalSeguro('cdra_avisos_local', docs);
 
             if (!inicializadoAvisosRef.current) {
               docs.forEach((item) => avisosVistosRef.current.add(item.id));
@@ -2133,10 +2100,10 @@ export default function App() {
     if (pin === null) return;
     if (pin === pinDirectiva || pin === PIN_DIRECTIVA_INICIAL) {
       if (pin === PIN_DIRECTIVA_INICIAL && pinDirectiva !== PIN_DIRECTIVA_INICIAL) {
-        localStorage.setItem('cdra_pin_directiva', PIN_DIRECTIVA_INICIAL);
+        guardarLocalSeguro('cdra_pin_directiva', PIN_DIRECTIVA_INICIAL);
         setPinDirectiva(PIN_DIRECTIVA_INICIAL);
       }
-      localStorage.setItem('cdra_admin_activa', '1');
+      guardarLocalSeguro('cdra_admin_activa', '1');
       setIsAdmin(true);
     } else {
       alert('PIN de directiva incorrecto');
@@ -2472,7 +2439,7 @@ export default function App() {
     if (!urlsSincronizacion.includes(limpia)) {
       const actualizada = [...urlsSincronizacion, limpia];
       setUrlsSincronizacion(actualizada);
-      localStorage.setItem('cdra_urls_partidos', JSON.stringify(actualizada));
+      guardarLocalSeguro('cdra_urls_partidos', actualizada);
     }
     setNuevaUrlInput('');
   };
@@ -2480,7 +2447,7 @@ export default function App() {
   const handleQuitarUrlSincronizacion = (urlABorrar) => {
     const actualizada = urlsSincronizacion.filter((u) => u !== urlABorrar);
     setUrlsSincronizacion(actualizada);
-    localStorage.setItem('cdra_urls_partidos', JSON.stringify(actualizada));
+    guardarLocalSeguro('cdra_urls_partidos', actualizada);
   };
 
   const handleSincronizarUrls = async () => {
@@ -2599,7 +2566,6 @@ export default function App() {
     }
   };
 
-  // Foto opcional al añadir jugador desde Directiva
   const handleAddJugador = async (e) => {
     e.preventDefault();
     const dorsalLimpio = String(nuevoJugador.dorsal || '').trim();
@@ -2723,18 +2689,26 @@ export default function App() {
     }
   };
 
-  const { proximos: partidosProximos, jugados: partidosJugados } = separarPartidosProximosYJugados(partidos);
-  const goleadoresOrdenados = [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0));
+  const { proximos: partidosProximos, jugados: partidosJugados } = useMemo(
+    () => separarPartidosProximosYJugados(partidos),
+    [partidos]
+  );
+
+  const goleadoresOrdenados = useMemo(
+    () => [...plantilla].sort((a, b) => Number(b.goles || 0) - Number(a.goles || 0)),
+    [plantilla]
+  );
 
   const miIdPerfil = crearIdPerfil(perfil.nombre, perfil.dorsal, perfil.correo || '', perfil.rol || '');
   const miClavePerfil = obtenerClaveUnicaPerfil({ ...perfil, id: miIdPerfil });
+
   const {
     directivasVisibles,
     entrenadoresVisibles,
     usuariosMasculinosOrdenados,
     usuariosFemeninosOrdenados,
     totalPerfilesVisibles
-  } = (() => {
+  } = useMemo(() => {
     const mapa = new Map();
     for (const p of deduplicarPerfilesLista(perfilesClub)) {
       if (p.nombre || p.dorsal || p.foto || p.rol) {
@@ -2791,7 +2765,7 @@ export default function App() {
       usuariosFemeninosOrdenados: femeninos,
       totalPerfilesVisibles: todos.length
     };
-  })();
+  }, [perfilesClub, perfil, miIdPerfil, miClavePerfil]);
 
   const usuariosPorGeneroActual =
     generoPerfilesTab === 'femenina'
@@ -3926,10 +3900,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="card" style={{ fontSize: 12, color: 'var(--muted)', padding: '10px 12px' }}>
-              Recordatorio automático: si hay un aviso marcado como <strong>Urgente</strong>, se notifica también <strong>2 horas antes</strong> de cada partido programado.
-            </div>
-
             <div className="subtabs">
               <button className={`subtab ${avisosSubtab === 'avisos' ? 'active' : ''}`} onClick={() => setAvisosSubtab('avisos')}>
                 Avisos
@@ -3947,7 +3917,7 @@ export default function App() {
                     <textarea rows="3" placeholder="Mensaje para jugadores y familias *" required value={nuevoAviso.mensaje} onChange={(e) => setNuevoAviso({ ...nuevoAviso, mensaje: e.target.value })} />
                     <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input type="checkbox" style={{ width: 'auto' }} checked={nuevoAviso.urgente} onChange={(e) => setNuevoAviso({ ...nuevoAviso, urgente: e.target.checked })} />
-                      Marcar como Urgente (notifica al instante y 2h antes de cada partido)
+                      Marcar como Urgente
                     </label>
                     <button type="submit" className="btn-primary">Publicar Aviso</button>
                   </form>
