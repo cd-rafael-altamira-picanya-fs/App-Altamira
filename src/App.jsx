@@ -1951,13 +1951,6 @@ export default function App() {
       alert('El campo Contraseña / PIN * es obligatorio (mínimo 4 caracteres y distinto de 1234).');
       return;
     }
-    if (
-      !esEspecial &&
-      (pinLimpio === pinDirectiva || pinLimpio === PIN_DIRECTIVA_INICIAL)
-    ) {
-      alert('No puedes usar el PIN de Directiva como contraseña de jugador. Elige una contraseña distinta.');
-      return;
-    }
     if (pinLimpio !== formPinConfirm.trim()) {
       alert('La confirmación de la contraseña / PIN no coincide.');
       return;
