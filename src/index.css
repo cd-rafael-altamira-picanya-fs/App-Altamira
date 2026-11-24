@@ -33,7 +33,7 @@ body {
   background-attachment: fixed;
   background-size: cover;
   color: var(--text);
-  padding-bottom: 84px;
+  padding-bottom: 98px;
   min-height: 100vh;
 }
 
@@ -174,7 +174,7 @@ body {
 .container {
   max-width: 600px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 16px 24px;
 }
 
 .section-header {
@@ -542,6 +542,9 @@ td {
 
 .nav-item.active {
   color: var(--primary);
+  font-weight: 800;
+  background: rgba(15, 41, 74, 0.08);
+  border-radius: 10px;
 }
 
 .status-pill {
