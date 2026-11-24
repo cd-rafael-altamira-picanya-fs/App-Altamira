@@ -21,8 +21,11 @@
 
 html,
 body {
-  overflow-x: hidden;
+  width: 100%;
   max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -41,6 +44,7 @@ body {
   color: var(--text);
   padding-bottom: 100px;
   min-height: 100vh;
+  touch-action: pan-y;
 }
 
 .signo-mujer {
@@ -108,6 +112,8 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .header-title {
@@ -182,6 +188,8 @@ body {
   width: 100%;
   margin: 0 auto;
   padding: 16px;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .section-header {
@@ -456,6 +464,7 @@ img[alt*="Foto de perfil"] {
 .table-wrap {
   overflow-x: auto;
   width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -527,6 +536,7 @@ td {
   bottom: 0;
   left: 0;
   right: 0;
+  width: 100%;
   background: rgba(255, 255, 255, 0.97);
   border-top: 1px solid var(--border);
   display: flex;
