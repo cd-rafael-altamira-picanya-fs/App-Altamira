@@ -39,12 +39,13 @@ import {
   RefreshCw
 } from 'lucide-react';
 
+const NOMBRE_CREADOR_APP = '@dagakol';
 const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
-const MAX_PARTIDOS_POR_IMPORTACION = 80;
-const MAX_EQUIPOS_CLASIFICACION = 60;
-const TTL_SINCRONIZACION_MS = 15 * 60 * 1000;
+const MAX_PARTIDOS_POR_IMPORTACION = 60;
+const MAX_EQUIPOS_CLASIFICACION = 40;
+const TTL_SINCRONIZACION_MS = 60 * 60 * 1000;
 
 const CATEGORIAS_BASE = [
   'Senior',
@@ -1134,6 +1135,9 @@ function TarjetaMiPerfil({
         <button type="button" className="btn-primary" onClick={handleAbrirEditarPerfil}>
           Editar foto, nombre, dorsal, edad, teléfono o contraseña
         </button>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+          App creada por <strong>{NOMBRE_CREADOR_APP}</strong>
+        </div>
       </div>
     </div>
   );
@@ -1468,7 +1472,7 @@ export default function App() {
       return;
     }
     try {
-      const snapPerfiles = await getDocs(query(collection(db, 'perfiles'), limit(120)));
+      const snapPerfiles = await getDocs(query(collection(db, 'perfiles'), limit(60)));
       setFirebaseOk(true);
       guardarLocalSeguro('cdra_last_sync_perfiles_at', String(Date.now()));
       if (!snapPerfiles.empty) {
@@ -1499,12 +1503,12 @@ export default function App() {
     setRefrescandoDatos(true);
     try {
       const peticiones = [
-        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(80))),
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(40))),
         getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
-        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(120)))
+        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(60)))
       ];
       if (incluirPerfiles || forzar) {
-        peticiones.push(getDocs(query(collection(db, 'perfiles'), limit(120))));
+        peticiones.push(getDocs(query(collection(db, 'perfiles'), limit(60))));
       }
 
       const resultados = await Promise.all(peticiones);
@@ -2051,7 +2055,7 @@ export default function App() {
     let uAvisos = null;
     try {
       uAvisos = onSnapshot(
-        query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(25)),
+        query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(12)),
         (snap) => {
           setFirebaseOk(true);
           if (!snap.empty) {
@@ -2120,7 +2124,7 @@ export default function App() {
 
     const actualizada = partidos.map((p) => (p.id === partido.id ? { ...p, asistentes: nuevaLista } : p));
     guardarPartidosLocal(actualizada);
-    if (firebaseOk && !partido.id.startsWith('demo')) {
+    if (firebaseOk && !String(partido.id || '').startsWith('demo')) {
       try {
         await updateDoc(doc(db, 'partidos', partido.id), { asistentes: nuevaLista });
       } catch {
@@ -4137,7 +4141,7 @@ export default function App() {
         )}
 
         <div className="status-pill">
-          {firebaseOk ? '● Sincronizado con Firebase' : '○ Modo local activo'}
+          {firebaseOk ? '● Sincronizado con Firebase' : '○ Modo local activo'} · Creado por {NOMBRE_CREADOR_APP}
         </div>
       </main>
 
