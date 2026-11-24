@@ -2941,21 +2941,19 @@ export default function App() {
     return (
       <div>
         <header className="header">
-          <div className="header-title">
-            {escudoCargado ? (
-              <img
-                src="/escudo.png"
-                alt="Escudo C.D. Rafael Altamira"
-                className="escudo-img"
-                onError={() => setEscudoCargado(false)}
-              />
-            ) : (
-              <div className="badge-escudo">CDRA</div>
-            )}
-            <div>
-              <h1>C.D. Rafael Altamira</h1>
-              <p>Picanya Fútbol Sala · Acceso del Club</p>
-            </div>
+          {escudoCargado ? (
+            <img
+              src="/escudo.png"
+              alt="Escudo C.D. Rafael Altamira"
+              className="escudo-img"
+              onError={() => setEscudoCargado(false)}
+            />
+          ) : (
+            <div className="badge-escudo">CDRA</div>
+          )}
+          <div className="header-content">
+            <h1>C.D. Rafael Altamira</h1>
+            <p>Picanya Fútbol Sala · Acceso del Club</p>
           </div>
         </header>
 
@@ -3134,25 +3132,27 @@ export default function App() {
     return (
       <div>
         <header className="header">
-          <div className="header-title">
-            {escudoCargado ? (
-              <img
-                src="/escudo.png"
-                alt="Escudo C.D. Rafael Altamira"
-                className="escudo-img"
-                onError={() => setEscudoCargado(false)}
-              />
-            ) : (
-              <div className="badge-escudo">CDRA</div>
-            )}
-            <div>
-              <h1>C.D. Rafael Altamira</h1>
-              <p>{editandoEspecial ? `Perfil de ${formRol}` : 'Configuración del jugador'}</p>
+          {escudoCargado ? (
+            <img
+              src="/escudo.png"
+              alt="Escudo C.D. Rafael Altamira"
+              className="escudo-img"
+              onError={() => setEscudoCargado(false)}
+            />
+          ) : (
+            <div className="badge-escudo">CDRA</div>
+          )}
+          <div className="header-content">
+            <h1>C.D. Rafael Altamira</h1>
+            <div className="header-actions">
+              <button type="button" className="admin-btn" onClick={handleCerrarSesion}>
+                <LogOut size={14} /> Salir
+              </button>
             </div>
+            <p className="header-usuario">
+              {editandoEspecial ? `Perfil de ${formRol}` : 'Configuración del jugador'}
+            </p>
           </div>
-          <button type="button" className="admin-btn" onClick={handleCerrarSesion}>
-            <LogOut size={14} /> Salir
-          </button>
         </header>
 
         <main className="container">
@@ -3281,42 +3281,56 @@ export default function App() {
   return (
     <div>
       <header className="header">
-        <div className="header-title">
-          {escudoCargado ? (
-            <img
-              src="/escudo.png"
-              alt="Escudo C.D. Rafael Altamira"
-              className="escudo-img"
-              onError={() => setEscudoCargado(false)}
-            />
-          ) : (
-            <div className="badge-escudo">CDRA</div>
-          )}
-          <div>
-            <h1>C.D. Rafael Altamira</h1>
-            <p>
-              {perfil.nombre}
-              {mostrarDorsalCabecera ? ` · #${dorsalCabecera}` : ` · ${perfil.rol}`}
-            </p>
+        {escudoCargado ? (
+          <img
+            src="/escudo.png"
+            alt="Escudo C.D. Rafael Altamira"
+            className="escudo-img"
+            onError={() => setEscudoCargado(false)}
+          />
+        ) : (
+          <div className="badge-escudo">CDRA</div>
+        )}
+
+        <div className="header-content">
+          <h1>C.D. Rafael Altamira</h1>
+
+          <div className="header-actions">
+            <button
+              type="button"
+              className="admin-btn"
+              title="Forzar actualización desde Firebase"
+              onClick={() => cargarDatosUnaVez(true, true)}
+              disabled={refrescandoDatos}
+            >
+              <RefreshCw size={14} /> {refrescandoDatos ? '...' : 'Sync'}
+            </button>
+            <button
+              type="button"
+              className="admin-btn"
+              onClick={() => {
+                setTab('perfil');
+                setShowForm(false);
+                setShowImportBox(false);
+                setShowImportTablaBox(false);
+              }}
+            >
+              <User size={14} /> Perfil
+            </button>
+            <button
+              type="button"
+              className={`admin-btn ${isAdmin ? 'active' : ''}`}
+              onClick={toggleAdmin}
+            >
+              {isAdmin ? <Unlock size={14} /> : <Lock size={14} />}
+              {isAdmin ? 'Directiva' : 'PIN'}
+            </button>
           </div>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="admin-btn"
-            title="Forzar actualización desde Firebase"
-            onClick={() => cargarDatosUnaVez(true, true)}
-            disabled={refrescandoDatos}
-          >
-            <RefreshCw size={14} /> {refrescandoDatos ? '...' : 'Sync'}
-          </button>
-          <button className="admin-btn" onClick={() => { setTab('perfil'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
-            <User size={14} /> Perfil
-          </button>
-          <button className={`admin-btn ${isAdmin ? 'active' : ''}`} onClick={toggleAdmin}>
-            {isAdmin ? <Unlock size={14} /> : <Lock size={14} />}
-            {isAdmin ? 'Directiva' : 'PIN'}
-          </button>
+
+          <p className="header-usuario">
+            {perfil.nombre}
+            {mostrarDorsalCabecera ? ` · #${dorsalCabecera}` : ` · ${perfil.rol}`}
+          </p>
         </div>
       </header>
 
