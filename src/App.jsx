@@ -866,8 +866,8 @@ function formatearEtiquetaUsuarioCabecera(perfilObj, mostrarDorsal, dorsalValor)
   const nombre = String(perfilObj?.nombre || '').trim();
   const rol = String(perfilObj?.rol || '').trim();
   const esDir =
-    nombre.toLowerCase() === 'directiva' ||
-    rol.toLowerCase() === 'directiva';
+    rol.toLowerCase() === 'directiva' ||
+    nombre.toLowerCase() === 'directiva';
 
   if (esDir) {
     return 'Directiva';
@@ -1768,16 +1768,86 @@ export default function App() {
       return;
     }
 
-    if (pinIntroducido === pinDirectiva || pinIntroducido === PIN_DIRECTIVA_INICIAL) {
+    const candidatos = deduplicarPerfilesLista([
+      ...perfilesClub,
+      ...(perfil && perfil.nombre ? [perfil] : [])
+    ]);
+
+    const coincidenciaIdentidad = idIntroducido
+      ? candidatos.find((item) => {
+          const nombreMatch = item.nombre && item.nombre.trim().toLowerCase() === idIntroducido;
+          const correoMatch = item.correo && item.correo.trim().toLowerCase() === idIntroducido;
+          return nombreMatch || correoMatch;
+        })
+      : null;
+
+    const esPinDirectivaValido =
+      pinIntroducido === pinDirectiva || pinIntroducido === PIN_DIRECTIVA_INICIAL;
+
+    if (coincidenciaIdentidad) {
+      const esCuentaDirectiva =
+        coincidenciaIdentidad.rol === 'Directiva' ||
+        coincidenciaIdentidad.nombre.trim().toLowerCase() === 'directiva';
+
+      const pinGuardadoUsuario = String(coincidenciaIdentidad.pinUsuario || '').trim();
+      const pinCoincide = esCuentaDirectiva
+        ? (pinGuardadoUsuario === pinIntroducido || esPinDirectivaValido)
+        : pinGuardadoUsuario === pinIntroducido;
+
+      if (!pinCoincide) {
+        alert('La contraseña o PIN no coincide con ese nombre o seudónimo.');
+        return;
+      }
+
+      const esEspecial = esRolSinDorsal(coincidenciaIdentidad.rol);
+      const dorsalItem = String(coincidenciaIdentidad.dorsal || '').trim();
+      const perfilRecuperado = {
+        nombre: coincidenciaIdentidad.nombre || idRaw,
+        correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
+        rol: esCuentaDirectiva ? 'Directiva' : (coincidenciaIdentidad.rol || 'Jugador'),
+        categoria: esCuentaDirectiva
+          ? 'Directiva'
+          : esEspecial
+          ? (coincidenciaIdentidad.rol || 'Entrenador')
+          : (coincidenciaIdentidad.categoria || ''),
+        dorsal: (esCuentaDirectiva || esEspecial || dorsalItem === '0') ? '' : dorsalItem,
+        telefono: limpiarTelefono(coincidenciaIdentidad.telefono || ''),
+        edad: (esCuentaDirectiva || esEspecial) ? '' : normalizarEdad(coincidenciaIdentidad.edad || ''),
+        foto: coincidenciaIdentidad.foto || '',
+        pinUsuario: pinGuardadoUsuario || pinIntroducido,
+        esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva || esEspecial),
+        tipoSlot: coincidenciaIdentidad.tipoSlot || ''
+      };
+
+      setPerfil(perfilRecuperado);
+      guardarLocalSeguro('cdra_perfil', perfilRecuperado);
+      guardarLocalSeguro('cdra_sesion_activa', '1');
+      if (esCuentaDirectiva) {
+        guardarLocalSeguro('cdra_admin_activa', '1');
+      } else {
+        localStorage.removeItem('cdra_admin_activa');
+      }
+      setIsAdmin(esCuentaDirectiva);
+      setSesionIniciada(true);
+      const completo = esCuentaDirectiva || perfilJugadorCompleto(perfilRecuperado);
+      setForzarOnboarding(!completo);
+      setPinLoginInput('');
+      if (completo) {
+        irAAvisosAlEntrar();
+      }
+      return;
+    }
+
+    if (esPinDirectivaValido && (!idIntroducido || idIntroducido === 'directiva')) {
       const perfilDir = {
         nombre: idRaw || 'Directiva',
-        correo: idIntroducido.includes('@') ? idIntroducido : '',
+        correo: '',
         rol: 'Directiva',
         categoria: 'Directiva',
         dorsal: '',
-        telefono: limpiarTelefono(perfil.telefono || ''),
-        edad: normalizarEdad(perfil.edad || ''),
-        foto: perfil.foto || '',
+        telefono: '',
+        edad: '',
+        foto: '',
         pinUsuario: pinIntroducido,
         esReservaDirectiva: false
       };
@@ -1832,58 +1902,6 @@ export default function App() {
       return;
     }
 
-    const candidatos = [
-      ...perfilesClub,
-      ...(perfil && perfil.nombre ? [perfil] : [])
-    ];
-
-    const coincidenciaIdentidad = candidatos.find((item) => {
-      const nombreMatch = item.nombre && item.nombre.trim().toLowerCase() === idIntroducido;
-      const correoMatch = item.correo && item.correo.trim().toLowerCase() === idIntroducido;
-      return nombreMatch || correoMatch;
-    });
-
-    if (coincidenciaIdentidad) {
-      if (coincidenciaIdentidad.pinUsuario && coincidenciaIdentidad.pinUsuario.trim() === pinIntroducido) {
-        const esDir = coincidenciaIdentidad.rol === 'Directiva';
-        const esEspecial = esRolSinDorsal(coincidenciaIdentidad.rol);
-        const dorsalItem = String(coincidenciaIdentidad.dorsal || '').trim();
-        const perfilRecuperado = {
-          nombre: coincidenciaIdentidad.nombre || idRaw,
-          correo: coincidenciaIdentidad.correo || (idIntroducido.includes('@') ? idIntroducido : ''),
-          rol: coincidenciaIdentidad.rol || 'Jugador',
-          categoria: esEspecial ? (coincidenciaIdentidad.rol || 'Entrenador') : (coincidenciaIdentidad.categoria || ''),
-          dorsal: (esEspecial || dorsalItem === '0') ? '' : dorsalItem,
-          telefono: limpiarTelefono(coincidenciaIdentidad.telefono || ''),
-          edad: esEspecial ? '' : normalizarEdad(coincidenciaIdentidad.edad || ''),
-          foto: coincidenciaIdentidad.foto || '',
-          pinUsuario: coincidenciaIdentidad.pinUsuario,
-          esReservaDirectiva: Boolean(coincidenciaIdentidad.esReservaDirectiva || esEspecial),
-          tipoSlot: coincidenciaIdentidad.tipoSlot || ''
-        };
-        setPerfil(perfilRecuperado);
-        guardarLocalSeguro('cdra_perfil', perfilRecuperado);
-        guardarLocalSeguro('cdra_sesion_activa', '1');
-        if (esDir) {
-          guardarLocalSeguro('cdra_admin_activa', '1');
-        } else {
-          localStorage.removeItem('cdra_admin_activa');
-        }
-        setIsAdmin(esDir);
-        setSesionIniciada(true);
-        const completo = perfilJugadorCompleto(perfilRecuperado);
-        setForzarOnboarding(!completo);
-        setPinLoginInput('');
-        if (completo) {
-          irAAvisosAlEntrar();
-        }
-        return;
-      } else {
-        alert('La contraseña o PIN no coincide con ese nombre o seudónimo.');
-        return;
-      }
-    }
-
     alert('No se encontró ese usuario. Puedes registrarte como jugador o usar el PIN inicial 1234.');
   };
 
@@ -1933,6 +1951,13 @@ export default function App() {
       alert('El campo Contraseña / PIN * es obligatorio (mínimo 4 caracteres y distinto de 1234).');
       return;
     }
+    if (
+      !esEspecial &&
+      (pinLimpio === pinDirectiva || pinLimpio === PIN_DIRECTIVA_INICIAL)
+    ) {
+      alert('No puedes usar el PIN de Directiva como contraseña de jugador. Elige una contraseña distinta.');
+      return;
+    }
     if (pinLimpio !== formPinConfirm.trim()) {
       alert('La confirmación de la contraseña / PIN no coincide.');
       return;
@@ -1942,7 +1967,7 @@ export default function App() {
     const perfilActualizado = {
       nombre: nombreLimpio,
       correo: correoLimpio,
-      rol: formRol || 'Jugador',
+      rol: esEspecial ? formRol : 'Jugador',
       categoria: categoriaLimpia,
       dorsal: dorsalLimpio,
       telefono: telefonoLimpio,
@@ -1955,6 +1980,10 @@ export default function App() {
     setPerfil(perfilActualizado);
     guardarLocalSeguro('cdra_perfil', perfilActualizado);
     guardarLocalSeguro('cdra_sesion_activa', '1');
+    if (!esEspecial) {
+      localStorage.removeItem('cdra_admin_activa');
+      setIsAdmin(false);
+    }
     setForzarOnboarding(false);
     setModoRegistroJugador(false);
     setSesionIniciada(true);
