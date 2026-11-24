@@ -36,7 +36,8 @@ import {
   Download,
   CopyX,
   Phone,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 
 const NOMBRE_CREADOR_APP = '@dagakol';
@@ -46,6 +47,27 @@ const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
 const MAX_PARTIDOS_POR_IMPORTACION = 60;
 const MAX_EQUIPOS_CLASIFICACION = 40;
 const TTL_SINCRONIZACION_MS = 60 * 60 * 1000;
+
+const REDES_SOCIALES_CLUB = [
+  {
+    nombre: 'Facebook Oficial',
+    detalle: 'Noticias, fotos y actualidad del club',
+    url: 'https://www.facebook.com/share/1EGbswnnTm/',
+    color: '#1877F2'
+  },
+  {
+    nombre: 'Instagram Oficial',
+    detalle: 'Resultados, crónicas y día a día',
+    url: 'https://www.instagram.com/altamirapicanyafsf?dmpr=MWV4c3F2YnpnYmxxag==',
+    color: '#E1306C'
+  },
+  {
+    nombre: 'Instagram Femenino ♀',
+    detalle: 'Sección femenina · C.D. Rafael Altamira',
+    url: 'https://www.instagram.com/altamirapicanya2020?avpt=a2t3eDA5Y3F1d3li',
+    color: '#db2777'
+  }
+];
 
 const CATEGORIAS_BASE = [
   'Senior',
@@ -3909,7 +3931,7 @@ export default function App() {
                 Avisos
               </button>
               <button className={`subtab ${avisosSubtab === 'pistas' ? 'active' : ''}`} onClick={() => setAvisosSubtab('pistas')}>
-                Pabellones y Horarios
+                Pabellones, Horarios y Redes
               </button>
             </div>
 
@@ -3948,6 +3970,36 @@ export default function App() {
 
             {avisosSubtab === 'pistas' && (
               <div>
+                <div className="card">
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                    Redes Sociales del Club
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                    Sigue toda la actividad, fotos y resultados oficiales
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {REDES_SOCIALES_CLUB.map((red) => (
+                      <a
+                        key={red.nombre}
+                        href={red.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-primary"
+                        style={{
+                          textDecoration: 'none',
+                          justifyContent: 'space-between',
+                          background: red.color
+                        }}
+                      >
+                        <span>
+                          <TextoConSignoGenero texto={red.nombre} />
+                        </span>
+                        <ExternalLink size={14} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
                 {PABELLONES.map((pb) => (
                   <div key={pb.nombre} className="card">
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{pb.nombre}</div>
