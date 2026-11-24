@@ -39,6 +39,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+const NOMBRE_CLUB_APP = 'C.D. Rafael Altamira Picanya';
 const NOMBRE_CREADOR_APP = '@dagakol';
 const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
@@ -861,6 +862,28 @@ function separarPartidosProximosYJugados(lista) {
   return { proximos, jugados };
 }
 
+function formatearEtiquetaUsuarioCabecera(perfilObj, mostrarDorsal, dorsalValor) {
+  const nombre = String(perfilObj?.nombre || '').trim();
+  const rol = String(perfilObj?.rol || '').trim();
+  const esDir =
+    nombre.toLowerCase() === 'directiva' ||
+    rol.toLowerCase() === 'directiva';
+
+  if (esDir) {
+    return 'Directiva';
+  }
+
+  if (mostrarDorsal) {
+    return `${nombre} · #${dorsalValor}`;
+  }
+
+  if (rol && rol.toLowerCase() !== nombre.toLowerCase()) {
+    return `${nombre} · ${rol}`;
+  }
+
+  return nombre || rol || 'Usuario';
+}
+
 function TextoConSignoGenero({ texto }) {
   if (!texto) return null;
   const partes = String(texto).split(/(♀|♂)/g);
@@ -1448,7 +1471,7 @@ export default function App() {
       const resultado = await Notification.requestPermission();
       setPermisoNotifMovil(resultado);
       if (resultado === 'granted') {
-        new Notification('C.D. Rafael Altamira', {
+        new Notification(NOMBRE_CLUB_APP, {
           body: 'Notificaciones activadas. Te avisaremos cuando haya un aviso nuevo.',
           icon: '/escudo.png'
         });
@@ -2944,7 +2967,7 @@ export default function App() {
           {escudoCargado ? (
             <img
               src="/escudo.png"
-              alt="Escudo C.D. Rafael Altamira"
+              alt={`Escudo ${NOMBRE_CLUB_APP}`}
               className="escudo-img"
               onError={() => setEscudoCargado(false)}
             />
@@ -2952,7 +2975,7 @@ export default function App() {
             <div className="badge-escudo">CDRA</div>
           )}
           <div className="header-content">
-            <h1>C.D. Rafael Altamira</h1>
+            <h1>{NOMBRE_CLUB_APP}</h1>
             <p>Picanya Fútbol Sala · Acceso del Club</p>
           </div>
         </header>
@@ -3135,7 +3158,7 @@ export default function App() {
           {escudoCargado ? (
             <img
               src="/escudo.png"
-              alt="Escudo C.D. Rafael Altamira"
+              alt={`Escudo ${NOMBRE_CLUB_APP}`}
               className="escudo-img"
               onError={() => setEscudoCargado(false)}
             />
@@ -3143,7 +3166,7 @@ export default function App() {
             <div className="badge-escudo">CDRA</div>
           )}
           <div className="header-content">
-            <h1>C.D. Rafael Altamira</h1>
+            <h1>{NOMBRE_CLUB_APP}</h1>
             <div className="header-actions">
               <button type="button" className="admin-btn" onClick={handleCerrarSesion}>
                 <LogOut size={14} /> Salir
@@ -3277,6 +3300,11 @@ export default function App() {
 
   const dorsalCabecera = String(perfil?.dorsal || '').trim();
   const mostrarDorsalCabecera = !sinDorsalUsuarioActual && dorsalCabecera !== '' && dorsalCabecera !== '0';
+  const etiquetaUsuarioCabecera = formatearEtiquetaUsuarioCabecera(
+    perfil,
+    mostrarDorsalCabecera,
+    dorsalCabecera
+  );
 
   return (
     <div>
@@ -3284,7 +3312,7 @@ export default function App() {
         {escudoCargado ? (
           <img
             src="/escudo.png"
-            alt="Escudo C.D. Rafael Altamira"
+            alt={`Escudo ${NOMBRE_CLUB_APP}`}
             className="escudo-img"
             onError={() => setEscudoCargado(false)}
           />
@@ -3293,7 +3321,7 @@ export default function App() {
         )}
 
         <div className="header-content">
-          <h1>C.D. Rafael Altamira</h1>
+          <h1>{NOMBRE_CLUB_APP}</h1>
 
           <div className="header-actions">
             <button
@@ -3327,10 +3355,7 @@ export default function App() {
             </button>
           </div>
 
-          <p className="header-usuario">
-            {perfil.nombre}
-            {mostrarDorsalCabecera ? ` · #${dorsalCabecera}` : ` · ${perfil.rol}`}
-          </p>
+          <p className="header-usuario">{etiquetaUsuarioCabecera}</p>
         </div>
       </header>
 
