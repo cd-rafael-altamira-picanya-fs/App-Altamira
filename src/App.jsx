@@ -44,9 +44,9 @@ const NOMBRE_CREADOR_APP = '@dagakol';
 const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
-const MAX_PARTIDOS_POR_IMPORTACION = 60;
+const MAX_PARTIDOS_POR_IMPORTACION = 50;
 const MAX_EQUIPOS_CLASIFICACION = 20;
-const TTL_SINCRONIZACION_MS = 3 * 60 * 60 * 1000;
+const TTL_SINCRONIZACION_MS = 6 * 60 * 60 * 1000;
 
 const REDES_SOCIALES_CLUB = [
   {
@@ -1030,7 +1030,7 @@ function procesarFotoCircular(file, callback) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const size = 120;
+      const size = 96;
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -1038,7 +1038,7 @@ function procesarFotoCircular(file, callback) {
       const sx = (img.width - minSide) / 2;
       const sy = (img.height - minSide) / 2;
       ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-      callback(canvas.toDataURL('image/jpeg', 0.6));
+      callback(canvas.toDataURL('image/jpeg', 0.5));
     };
     img.src = ev.target.result;
   };
@@ -1080,46 +1080,20 @@ function obtenerClaveUnicaPerfil(item) {
 }
 
 function AvatarCircular({ src, alt, letra, tamano = 48 }) {
-  const boxRef = useRef(null);
-  const imgRef = useRef(null);
-
-  useEffect(() => {
-    const px = `${tamano}px`;
-    if (boxRef.current) {
-      boxRef.current.style.setProperty('width', px, 'important');
-      boxRef.current.style.setProperty('height', px, 'important');
-      boxRef.current.style.setProperty('min-width', px, 'important');
-      boxRef.current.style.setProperty('min-height', px, 'important');
-      boxRef.current.style.setProperty('max-width', px, 'important');
-      boxRef.current.style.setProperty('max-height', px, 'important');
-      boxRef.current.style.setProperty('border-radius', '9999px', 'important');
-      boxRef.current.style.setProperty('border', '3px solid #ec4899', 'important');
-      boxRef.current.style.setProperty('overflow', 'hidden', 'important');
-      boxRef.current.style.setProperty('position', 'relative', 'important');
-      boxRef.current.style.setProperty('display', 'inline-flex', 'important');
-      boxRef.current.style.setProperty('align-items', 'center', 'important');
-      boxRef.current.style.setProperty('justify-content', 'center', 'important');
-      boxRef.current.style.setProperty('flex-shrink', '0', 'important');
-      boxRef.current.style.setProperty('margin', '0', 'important');
-    }
-    if (imgRef.current) {
-      imgRef.current.style.setProperty('width', '100%', 'important');
-      imgRef.current.style.setProperty('height', '100%', 'important');
-      imgRef.current.style.setProperty('border-radius', '9999px', 'important');
-      imgRef.current.style.setProperty('border', 'none', 'important');
-      imgRef.current.style.setProperty('object-fit', 'cover', 'important');
-      imgRef.current.style.setProperty('object-position', 'center', 'important');
-      imgRef.current.style.setProperty('position', 'static', 'important');
-      imgRef.current.style.setProperty('float', 'none', 'important');
-      imgRef.current.style.setProperty('margin', '0', 'important');
-    }
-  }, [tamano, src]);
-
   return (
     <div
-      ref={boxRef}
       className="avatar-circular-box"
       style={{
+        width: `${tamano}px`,
+        height: `${tamano}px`,
+        minWidth: `${tamano}px`,
+        minHeight: `${tamano}px`,
+        borderRadius: '9999px',
+        overflow: 'hidden',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
         backgroundColor: '#1e3a8a',
         color: '#ffffff',
         fontWeight: 800,
@@ -1128,7 +1102,17 @@ function AvatarCircular({ src, alt, letra, tamano = 48 }) {
       }}
     >
       {src ? (
-        <img ref={imgRef} src={src} alt={alt || 'Foto de perfil'} />
+        <img
+          src={src}
+          alt={alt || 'Foto de perfil'}
+          loading="lazy"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center'
+          }}
+        />
       ) : (
         <span>{letra || 'U'}</span>
       )}
@@ -1516,7 +1500,7 @@ export default function App() {
       return;
     }
     try {
-      const snapPerfiles = await getDocs(query(collection(db, 'perfiles'), limit(30)));
+      const snapPerfiles = await getDocs(query(collection(db, 'perfiles'), limit(25)));
       setFirebaseOk(true);
       guardarLocalSeguro('cdra_last_sync_perfiles_at', String(Date.now()));
       if (!snapPerfiles.empty) {
@@ -1547,13 +1531,13 @@ export default function App() {
     setRefrescandoDatos(true);
     try {
       const peticiones = [
-        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(20))),
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(15))),
         getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
-        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(30))),
-        getDocs(query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(10)))
+        getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(25))),
+        getDocs(query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(8)))
       ];
       if (incluirPerfiles || forzar) {
-        peticiones.push(getDocs(query(collection(db, 'perfiles'), limit(30))));
+        peticiones.push(getDocs(query(collection(db, 'perfiles'), limit(25))));
       }
 
       const resultados = await Promise.all(peticiones);
@@ -2902,7 +2886,7 @@ export default function App() {
           <a
             href={urlMaps}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             title="Abrir ubicación en Google Maps"
             style={{
               display: 'inline-flex',
@@ -3349,7 +3333,7 @@ export default function App() {
             <button
               type="button"
               className="admin-btn"
-              title="Forzar actualización desde Firebase"
+              title="Actualizar datos desde Firebase"
               onClick={() => cargarDatosUnaVez(true, true)}
               disabled={refrescandoDatos}
             >
@@ -4039,7 +4023,7 @@ export default function App() {
                         key={red.nombre}
                         href={red.url}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="btn-primary"
                         style={{
                           textDecoration: 'none',
@@ -4063,7 +4047,7 @@ export default function App() {
                     <a
                       href={pb.mapa}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="btn-primary"
                       style={{ textDecoration: 'none' }}
                     >
