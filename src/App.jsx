@@ -114,8 +114,6 @@ const FUENTES_CATEGORIAS_CLUB = [
   }
 ];
 
-const URLS_POR_DEFECTO = FUENTES_CATEGORIAS_CLUB.map((f) => f.url);
-
 const TEXTO_MUESTRA_CLASIFICACION = `#\tEquipo\tPts\tPJ\tPG\tPE\tPP\tGF\tGC\tDif
 1\tC.D. Corbera\t25\t9\t8\t1\t0\t59\t10\t+49
 2\tF.S. Picassent 'B'\t22\t9\t7\t1\t1\t50\t23\t+27`;
@@ -1106,7 +1104,9 @@ function normalizarCategoria(cat) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
+    .replace(/[♂♀]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function normalizarDorsal(dorsal) {
@@ -1279,17 +1279,17 @@ function TarjetaMiPerfil({
 
 const DEMO_PARTIDOS = [
   {
-    id: 'demo_ben_1',
+    id: 'demo_ben_hoy_27',
     categoria: 'Benjamín ♂',
-    local: 'Salesianos San Antonio Abad \'A\'',
-    visitante: 'C.D. Rafael Altamira Picanya',
+    local: 'C.D. Rafael Altamira Picanya',
+    visitante: 'Salesianos San Antonio Abad \'A\'',
     fecha: '27-11-2026 · 18:00 CET',
-    pabellon: 'Colegio Salesianos San Antonio Abad Pista 2',
+    pabellon: 'Pabellón Municipal Picanya',
     resultado: 'VS',
     asistentes: []
   },
   {
-    id: 'demo_ale_1',
+    id: 'demo_ale_hoy_27',
     categoria: 'Alevín ♂',
     local: 'Salesianos San Antonio Abad \'A\'',
     visitante: 'C.D. Rafael Altamira Picanya \'A\'',
@@ -1435,7 +1435,22 @@ export default function App() {
     setTab('avisos');
   };
 
-  const [categoriaActiva, setCategoriaActiva] = useState('Todas');
+  const [categoriaActiva, setCategoriaActiva] = useState(() => {
+    const guardada = localStorage.getItem('cdra_categoria_activa') || '';
+    if (guardada && CATEGORIAS_VISIBLES_CLUB.some((c) => normalizarCategoria(c) === normalizarCategoria(guardada))) {
+      return guardada;
+    }
+    return CATEGORIAS_VISIBLES_CLUB[0];
+  });
+
+  const seleccionarCategoria = (cat) => {
+    const valida =
+      CATEGORIAS_VISIBLES_CLUB.find((c) => normalizarCategoria(c) === normalizarCategoria(cat)) ||
+      CATEGORIAS_VISIBLES_CLUB[0];
+    setCategoriaActiva(valida);
+    guardarLocalSeguro('cdra_categoria_activa', valida);
+  };
+
   const [partidosSubtab, setPartidosSubtab] = useState('proximos');
   const [partidoSeleccionadoId, setPartidoSeleccionadoId] = useState(null);
   const [ligaSubtab, setLigaSubtab] = useState('tabla');
@@ -1677,10 +1692,11 @@ export default function App() {
       if (incluirPerfiles) {
         await cargarPerfilesSiToca(false);
       }
-      return;
+      return { partidosCargados: partidos };
     }
 
     setRefrescandoDatos(true);
+    let partidosCargados = partidos;
     try {
       const peticiones = [
         getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(80))),
@@ -1701,6 +1717,7 @@ export default function App() {
 
       if (!snapPartidos.empty) {
         const docsPartidos = snapPartidos.docs.map((d) => ({ id: d.id, ...d.data() }));
+        partidosCargados = docsPartidos;
         setPartidos(docsPartidos);
         guardarLocalSeguro('cdra_partidos_local', docsPartidos);
       }
@@ -1753,7 +1770,8 @@ export default function App() {
     } finally {
       setRefrescandoDatos(false);
     }
-  }, [cargarPerfilesSiToca, dispararNotificacionMovilAviso]);
+    return { partidosCargados };
+  }, [cargarPerfilesSiToca, dispararNotificacionMovilAviso, partidos]);
 
   useEffect(() => {
     if (sesionIniciada && tab === 'perfil') {
@@ -2247,7 +2265,7 @@ export default function App() {
   };
 
   const [nuevoPartido, setNuevoPartido] = useState({
-    categoria: 'Juvenil ♂',
+    categoria: CATEGORIAS_VISIBLES_CLUB[0],
     local: 'C.D. Rafael Altamira FS',
     visitante: '',
     fecha: '',
@@ -2256,7 +2274,7 @@ export default function App() {
   });
 
   const [nuevoEquipoTabla, setNuevoEquipoTabla] = useState({
-    categoria: 'Juvenil ♂',
+    categoria: CATEGORIAS_VISIBLES_CLUB[0],
     pos: '',
     equipo: '',
     pts: '0',
@@ -2584,7 +2602,7 @@ export default function App() {
     for (const cand of candidatos) {
       if (nuevosConId.length >= MAX_EQUIPOS_CLASIFICACION) break;
       const nombreEq = sanearNombreEquipoTabla([String(cand.equipo || '').trim()]);
-      const catEq = cand.categoria || categoriaPorDefecto || 'Juvenil ♂';
+      const catEq = cand.categoria || categoriaPorDefecto || CATEGORIAS_VISIBLES_CLUB[0];
       const itemClave = { categoria: catEq, equipo: nombreEq };
       const claveEq = normalizarClaveClasificacion(itemClave);
       if (!nombreEq || !claveEq) continue;
@@ -2694,7 +2712,7 @@ export default function App() {
 
   const handleImportarClasificacionTexto = async (e) => {
     e.preventDefault();
-    const catDestino = categoriaActiva !== 'Todas' ? categoriaActiva : 'Juvenil ♂';
+    const catDestino = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
     const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion, catDestino);
     if (parseados.length === 0) {
       alert('No se detectaron filas de clasificación válidas en el texto pegado.');
@@ -2714,17 +2732,14 @@ export default function App() {
 
   const handleLimpiarTablaCompleta = async () => {
     if (!isAdmin) return;
-    const msg =
-      categoriaActiva !== 'Todas'
-        ? `¿Vaciar la tabla de clasificación de ${categoriaActiva}?`
-        : '¿Vaciar toda la tabla de clasificación para volver a importarla limpia?';
+    const catObjetivo = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
+    const msg = `¿Vaciar la tabla de clasificación de ${catObjetivo}?`;
     if (!window.confirm(msg)) {
       return;
     }
 
     const coincideCategoria = (item) =>
-      categoriaActiva === 'Todas' ||
-      normalizarCategoria(item.categoria) === normalizarCategoria(categoriaActiva);
+      normalizarCategoria(item.categoria) === normalizarCategoria(catObjetivo);
 
     const borrados = clasificacion.filter(coincideCategoria);
     const restantes = clasificacion.filter((item) => !coincideCategoria(item));
@@ -2809,27 +2824,43 @@ export default function App() {
 
   const sincronizarPartidosDesdeWebs = async (mostrarAvisoResultado = true) => {
     setSincronizandoUrls(true);
+    const catActual = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
+    const fuentesPrioritarias = [
+      ...fuentesSincronizacion.filter(
+        (f) => normalizarCategoria(f.categoria) === normalizarCategoria(catActual)
+      ),
+      ...fuentesSincronizacion.filter(
+        (f) => normalizarCategoria(f.categoria) !== normalizarCategoria(catActual)
+      )
+    ];
+
     try {
       let partidosDetectados = [];
       let clasifDetectada = [];
       let huboRespuestaEndpoint = false;
       let motivosError = [];
 
-      if (fuentesSincronizacion.length > 0) {
+      if (fuentesPrioritarias.length > 0) {
         try {
           const resp = await fetch('/api/sincronizar-partidos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              urls: urlsSincronizacion,
-              fuentes: fuentesSincronizacion
+              categoriaActiva: catActual,
+              urls: fuentesPrioritarias.map((f) => f.url),
+              fuentes: fuentesPrioritarias
             })
           });
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.ok) {
               huboRespuestaEndpoint = true;
-              partidosDetectados = Array.isArray(data.partidos) ? data.partidos : [];
+              partidosDetectados = Array.isArray(data.partidos)
+                ? data.partidos.map((item) => ({
+                    ...item,
+                    categoria: item?.categoria || catActual
+                  }))
+                : [];
               clasifDetectada = Array.isArray(data.clasificacion) ? data.clasificacion : [];
               if (Array.isArray(data.errores) && data.errores.length > 0) {
                 motivosError = data.errores.map((e) => e.motivo).filter(Boolean);
@@ -2841,14 +2872,15 @@ export default function App() {
         }
 
         if (!huboRespuestaEndpoint || partidosDetectados.length === 0) {
-          for (const fuente of fuentesSincronizacion) {
+          for (const fuente of fuentesPrioritarias) {
             try {
               const r = await fetch(fuente.url);
               if (!r.ok) continue;
               const cuerpo = await r.text();
+              const catFuente = fuente.categoria || catActual;
               const extraidos = cuerpo.trim().startsWith('<')
-                ? parsearPartidosDesdeHtml(cuerpo, fuente.categoria)
-                : parsearPartidosDesdeTexto(cuerpo, fuente.categoria);
+                ? parsearPartidosDesdeHtml(cuerpo, catFuente)
+                : parsearPartidosDesdeTexto(cuerpo, catFuente);
               if (extraidos.length > 0) {
                 partidosDetectados = [...partidosDetectados, ...extraidos];
               }
@@ -2859,16 +2891,23 @@ export default function App() {
         }
       }
 
-      await cargarDatosUnaVez(true, false);
+      const { partidosCargados } = await cargarDatosUnaVez(true, false);
+      const basePartidos =
+        Array.isArray(partidosCargados) && partidosCargados.length > 0
+          ? partidosCargados
+          : partidos;
 
-      const baseCorregida = partidos.map((p) => {
-        const catActual = String(p?.categoria || '');
-        if (/^senior\b/i.test(catActual) || !catActual.trim()) {
-          const nuevaCat = detectarCategoriaImportada(`${p.local || ''} ${p.visitante || ''} ${p.resultado || ''}`);
+      const baseCorregida = basePartidos.map((p) => {
+        const catPartido = String(p?.categoria || '');
+        if (/^senior\b/i.test(catPartido) || !catPartido.trim()) {
+          const inferida = detectarCategoriaImportada(
+            `${p.local || ''} ${p.visitante || ''} ${p.resultado || ''}`,
+            catActual
+          );
           if (firebaseOk && p?.id && !String(p.id).startsWith('demo') && !String(p.id).startsWith('sync_')) {
-            updateDoc(doc(db, 'partidos', p.id), { categoria: nuevaCat }).catch(() => {});
+            updateDoc(doc(db, 'partidos', p.id), { categoria: inferida }).catch(() => {});
           }
-          return { ...p, categoria: nuevaCat };
+          return { ...p, categoria: inferida };
         }
         return p;
       });
@@ -2881,7 +2920,7 @@ export default function App() {
       const { eliminadosFechas, eliminadosDuplicados } = await sanearPartidosInterno(listaResultante);
 
       if (clasifDetectada.length > 0) {
-        await registrarClasificacionSinDuplicar(clasifDetectada);
+        await registrarClasificacionSinDuplicar(clasifDetectada, catActual);
       }
 
       if (mostrarAvisoResultado) {
@@ -2897,9 +2936,9 @@ export default function App() {
             : '';
 
         if (partesResumen.length > 0) {
-          alert(`Partidos actualizados: ${partesResumen.join(' · ')}.${avisoBloqueos}`);
+          alert(`${catActual}: ${partesResumen.join(' · ')}.${avisoBloqueos}`);
         } else {
-          alert(`Partidos al día y limpios: sin duplicados ni novedades.${avisoBloqueos}`);
+          alert(`${catActual} al día y limpio: sin duplicados ni novedades.${avisoBloqueos}`);
         }
       }
     } catch {
@@ -2914,8 +2953,7 @@ export default function App() {
   const handleAddPartido = async (e) => {
     e.preventDefault();
     if (!nuevoPartido.visitante) return;
-    const catSeleccionada =
-      categoriaActiva !== 'Todas' ? categoriaActiva : (nuevoPartido.categoria || 'Juvenil ♂');
+    const catSeleccionada = categoriaActiva || nuevoPartido.categoria || CATEGORIAS_VISIBLES_CLUB[0];
     const item = {
       ...nuevoPartido,
       categoria: catSeleccionada,
@@ -2950,8 +2988,7 @@ export default function App() {
     if (!nuevoEquipoTabla.equipo) return;
     const gf = Number(nuevoEquipoTabla.gf || 0);
     const gc = Number(nuevoEquipoTabla.gc || 0);
-    const catTabla =
-      categoriaActiva !== 'Todas' ? categoriaActiva : (nuevoEquipoTabla.categoria || 'Juvenil ♂');
+    const catTabla = categoriaActiva || nuevoEquipoTabla.categoria || CATEGORIAS_VISIBLES_CLUB[0];
     const item = {
       categoria: catTabla,
       pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
@@ -3167,18 +3204,17 @@ export default function App() {
         lista.push(cat);
       }
     }
-    return ['Todas', ...lista];
+    return lista;
   }, []);
 
   const partidosFiltradosPorCategoria = useMemo(() => {
-    if (categoriaActiva === 'Todas') return partidos;
-    const catNorm = normalizarCategoria(categoriaActiva);
+    const catNorm = normalizarCategoria(categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0]);
     return partidos.filter((p) => {
       const catPartido = normalizarCategoria(p.categoria);
       if (catPartido === catNorm) return true;
       if (!catPartido || catPartido.startsWith('senior')) {
         const inferida = normalizarCategoria(
-          detectarCategoriaImportada(`${p.local || ''} ${p.visitante || ''} ${p.resultado || ''}`)
+          detectarCategoriaImportada(`${p.local || ''} ${p.visitante || ''} ${p.resultado || ''}`, '')
         );
         return inferida === catNorm;
       }
@@ -3187,8 +3223,7 @@ export default function App() {
   }, [partidos, categoriaActiva]);
 
   const clasificacionFiltrada = useMemo(() => {
-    if (categoriaActiva === 'Todas') return clasificacion;
-    const catNorm = normalizarCategoria(categoriaActiva);
+    const catNorm = normalizarCategoria(categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0]);
     return clasificacion.filter((c) => normalizarCategoria(c.categoria) === catNorm);
   }, [clasificacion, categoriaActiva]);
 
@@ -3344,7 +3379,7 @@ export default function App() {
             type="button"
             className={`subtab ${activa ? 'active' : ''}`}
             style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-            onClick={() => setCategoriaActiva(cat)}
+            onClick={() => seleccionarCategoria(cat)}
           >
             <TextoConSignoGenero texto={cat} />
           </button>
@@ -4136,7 +4171,7 @@ export default function App() {
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddPartido}>
                 <SelectorCategoriaYGenero
-                  valorActual={categoriaActiva !== 'Todas' ? categoriaActiva : nuevoPartido.categoria}
+                  valorActual={categoriaActiva || nuevoPartido.categoria}
                   onChangeValor={(val) => setNuevoPartido({ ...nuevoPartido, categoria: val })}
                 />
                 <input placeholder="Local" value={nuevoPartido.local} onChange={(e) => setNuevoPartido({ ...nuevoPartido, local: e.target.value })} />
@@ -4152,7 +4187,7 @@ export default function App() {
               <div>
                 {partidosProximos.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                    No hay partidos por jugar en {categoriaActiva === 'Todas' ? 'el club' : categoriaActiva} por ahora.
+                    No hay partidos por jugar en {categoriaActiva} por ahora.
                   </div>
                 ) : (
                   partidosProximos.map((p) => renderTarjetaPartidoCompacta(p, false))
@@ -4164,7 +4199,7 @@ export default function App() {
               <div>
                 {partidosJugados.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                    Aún no hay partidos jugados en {categoriaActiva === 'Todas' ? 'el club' : categoriaActiva}.
+                    Aún no hay partidos jugados en {categoriaActiva}.
                   </div>
                 ) : (
                   partidosJugados.map((p) => renderTarjetaPartidoCompacta(p, true))
@@ -4227,7 +4262,7 @@ export default function App() {
                 {isAdmin && showImportTablaBox && (
                   <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
-                      Importar clasificación ({categoriaActiva === 'Todas' ? 'Juvenil ♂' : categoriaActiva})
+                      Importar clasificación ({categoriaActiva})
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
                       Pega aquí las filas con columnas (# Equipo Pts PJ PG PE PP GF GC Dif) o el texto de clasificación:
