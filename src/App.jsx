@@ -86,8 +86,8 @@ const CATEGORIAS_CLUB = CATEGORIAS_BASE.flatMap((cat) => [
 ]);
 
 const URLS_POR_DEFECTO = [
-  'https://www.elbalondelacomunitat.es/equipo/905540140/partidos',
-  'https://futbuteo.com/valencia/campo/pabellon-mpal-fuente-la-higuera'
+  'https://futbuteo.com/valencia/equipo/c-d-rafael-altamira-picanya',
+  'https://www.elbalondelacomunitat.es/equipo/905540140/partidos'
 ];
 
 const TEXTO_MUESTRA_FFCV = `Jornada 8 (15-11-2026)
@@ -287,6 +287,16 @@ function esEquipoClubAltamira(nombre) {
   return /rafael altamira|picanya/i.test(String(nombre || ''));
 }
 
+function normalizarMarcadorPartido(valor) {
+  const limpio = String(valor || '').trim();
+  if (!limpio || /^vs$/i.test(limpio)) return 'VS';
+  const matchMarcador = limpio.match(/(\d+)\s*[-–:]\s*(\d+)/);
+  if (matchMarcador) {
+    return `${matchMarcador[1]} - ${matchMarcador[2]}`;
+  }
+  return limpio;
+}
+
 function parsearPartidosDesdeTexto(textoCrudo) {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
@@ -319,6 +329,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
     const horaMatch = linea.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
     const hora = horaMatch ? horaMatch[0] : '';
     const fechaEnLinea = extraerFechaDeTexto(linea);
+    const marcadorEnLineaMatch = linea.match(/(?:^|\s)(\d{1,2})\s*[-–]\s*(\d{1,2})(?:\s|$)/);
 
     if (
       !linea.includes('-') &&
@@ -373,6 +384,15 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       const fechaCompleta =
         hora && !fechaBase.includes(hora) ? `${fechaBase} · ${hora}` : fechaBase;
 
+      let resultadoDetectado = 'VS';
+      if (marcadorEnLineaMatch) {
+        const g1 = marcadorEnLineaMatch[1];
+        const g2 = marcadorEnLineaMatch[2];
+        resultadoDetectado = esFuera ? `${g2} - ${g1}` : `${g1} - ${g2}`;
+      } else if (partesGuion[2]) {
+        resultadoDetectado = normalizarMarcadorPartido(partesGuion[2]);
+      }
+
       resultados.push({
         categoria: detectarCategoriaImportada(`${linea} ${jornadaActual}`),
         local,
@@ -381,7 +401,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
         pabellon: esFuera
           ? `Pabellón visitante (${rivalParaPabellon})`
           : 'Pabellón Municipal Picanya',
-        resultado: 'VS'
+        resultado: resultadoDetectado
       });
       continue;
     }
@@ -437,11 +457,25 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       visitante,
       fecha: fechaCompleta,
       pabellon,
-      resultado: 'VS'
+      resultado: marcadorEnLineaMatch
+        ? `${marcadorEnLineaMatch[1]} - ${marcadorEnLineaMatch[2]}`
+        : 'VS'
     });
   }
 
   return resultados;
+}
+
+function parsearPartidosDesdeHtml(htmlTexto) {
+  if (!htmlTexto || typeof DOMParser === 'undefined') return [];
+  try {
+    const parser = new DOMParser();
+    const docHtml = parser.parseFromString(htmlTexto, 'text/html');
+    const textoPlano = docHtml.body ? docHtml.body.innerText || docHtml.body.textContent || '' : '';
+    return parsearPartidosDesdeTexto(textoPlano);
+  } catch {
+    return [];
+  }
 }
 
 function normalizarNombreEquipoClasificacion(nombre) {
@@ -1310,9 +1344,14 @@ export default function App() {
   const [showImportTablaBox, setShowImportTablaBox] = useState(false);
   const [textoImportarPartidos, setTextoImportarPartidos] = useState('');
   const [textoImportarClasificacion, setTextoImportarClasificacion] = useState('');
-  const [urlsSincronizacion, setUrlsSincronizacion] = useState(() =>
-    leerListaLocal('cdra_urls_partidos', URLS_POR_DEFECTO)
-  );
+  const [urlsSincronizacion, setUrlsSincronizacion] = useState(() => {
+    const guardadas = leerListaLocal('cdra_urls_partidos', URLS_POR_DEFECTO);
+    const lista = Array.isArray(guardadas) && guardadas.length > 0 ? guardadas : URLS_POR_DEFECTO;
+    if (!lista.includes(URLS_POR_DEFECTO[0])) {
+      return [URLS_POR_DEFECTO[0], ...lista];
+    }
+    return lista;
+  });
   const [nuevaUrlInput, setNuevaUrlInput] = useState('');
   const [sincronizandoUrls, setSincronizandoUrls] = useState(false);
   const [escudoCargado, setEscudoCargado] = useState(true);
@@ -1538,7 +1577,7 @@ export default function App() {
     setRefrescandoDatos(true);
     try {
       const peticiones = [
-        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(15))),
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(25))),
         getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
         getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(25))),
         getDocs(query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(8)))
@@ -2202,11 +2241,21 @@ export default function App() {
   };
 
   const registrarPartidosSinDuplicar = async (candidatos) => {
-    const clavesVistas = new Set(partidos.map((p) => normalizarClavePartido(p)));
-    const unicos = [];
+    let listaTrabajo = [...partidos];
+    const indicePorClave = new Map();
+    listaTrabajo.forEach((p, idx) => {
+      const k = normalizarClavePartido(p);
+      if (k && !indicePorClave.has(k)) {
+        indicePorClave.set(k, idx);
+      }
+    });
+
+    const nuevosParaAlta = [];
+    const actualizadosFirestore = [];
+    let procesados = 0;
 
     for (const cand of candidatos) {
-      if (unicos.length >= MAX_PARTIDOS_POR_IMPORTACION) break;
+      if (procesados >= MAX_PARTIDOS_POR_IMPORTACION) break;
 
       const localCrudo = String(cand.local || '').trim();
       const visitanteCrudo = String(cand.visitante || '').trim();
@@ -2259,56 +2308,134 @@ export default function App() {
           ? cand.pabellon
           : pabellonCalculado;
 
+      const resultadoNormalizado = normalizarMarcadorPartido(cand.resultado || 'VS');
+
       const itemLimpio = {
         categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
         local: localFinal,
         visitante: visitanteFinal,
         fecha: fechaDetectada,
         pabellon: pabellonFinal,
-        resultado: cand.resultado || 'VS'
+        resultado: resultadoNormalizado
       };
 
       const clave = normalizarClavePartido(itemLimpio);
-      if (!clave || clavesVistas.has(clave)) continue;
-      clavesVistas.add(clave);
-      unicos.push(itemLimpio);
+      if (!clave) continue;
+
+      procesados += 1;
+
+      if (indicePorClave.has(clave)) {
+        const idxExistente = indicePorClave.get(clave);
+        const actual = listaTrabajo[idxExistente];
+        const resultadoAnterior = normalizarMarcadorPartido(actual?.resultado || 'VS');
+        const resultadoFinal =
+          resultadoNormalizado !== 'VS' ? resultadoNormalizado : resultadoAnterior;
+
+        const fechaAnterior = String(actual?.fecha || '').trim();
+        const fechaFinal =
+          fechaDetectada &&
+          !/^(próximamente|proximamente|por confirmar)$/i.test(fechaDetectada) &&
+          (fechaDetectada.length >= fechaAnterior.length ||
+            /^(próximamente|proximamente|por confirmar)$/i.test(fechaAnterior))
+            ? fechaDetectada
+            : fechaAnterior || fechaDetectada;
+
+        const cambioDetectado =
+          resultadoFinal !== resultadoAnterior ||
+          fechaFinal !== fechaAnterior ||
+          (pabellonFinal && pabellonFinal !== actual?.pabellon);
+
+        if (cambioDetectado) {
+          const partidoActualizado = {
+            ...actual,
+            local: localFinal,
+            visitante: visitanteFinal,
+            fecha: fechaFinal,
+            pabellon: pabellonFinal || actual?.pabellon,
+            resultado: resultadoFinal
+          };
+          listaTrabajo[idxExistente] = partidoActualizado;
+          actualizadosFirestore.push(partidoActualizado);
+        }
+        continue;
+      }
+
+      const nuevoConId = {
+        id: `sync_${Date.now()}_${nuevosParaAlta.length}`,
+        ...itemLimpio,
+        asistentes: [],
+        createdAt: serverTimestamp()
+      };
+      listaTrabajo = [nuevoConId, ...listaTrabajo];
+      indicePorClave.clear();
+      listaTrabajo.forEach((p, idx) => {
+        const k = normalizarClavePartido(p);
+        if (k && !indicePorClave.has(k)) indicePorClave.set(k, idx);
+      });
+      nuevosParaAlta.push({ idTemporal: nuevoConId.id, datos: itemLimpio });
     }
 
-    if (unicos.length === 0) return 0;
+    if (nuevosParaAlta.length === 0 && actualizadosFirestore.length === 0) {
+      return { añadidos: 0, actualizados: 0 };
+    }
 
-    const nuevosConId = unicos.map((item, idx) => ({
-      id: `sync_${Date.now()}_${idx}`,
-      ...item,
-      asistentes: [],
-      createdAt: serverTimestamp()
-    }));
-
-    let listaActualizada = [...nuevosConId, ...partidos];
-    guardarPartidosLocal(listaActualizada);
+    guardarPartidosLocal(listaTrabajo);
 
     if (firebaseOk) {
-      const resultadosAltas = await Promise.allSettled(
-        unicos.map((item) =>
-          addDoc(collection(db, 'partidos'), { ...item, asistentes: [], createdAt: serverTimestamp() })
-        )
-      );
+      const tareas = [];
 
-      let huboIdReal = false;
-      listaActualizada = listaActualizada.map((p) => {
-        const idx = nuevosConId.findIndex((n) => n.id === p.id);
-        if (idx !== -1 && resultadosAltas[idx]?.status === 'fulfilled') {
-          huboIdReal = true;
-          return { ...p, id: resultadosAltas[idx].value.id };
+      for (const act of actualizadosFirestore) {
+        if (act?.id && !String(act.id).startsWith('demo') && !String(act.id).startsWith('sync_')) {
+          tareas.push(
+            updateDoc(doc(db, 'partidos', act.id), {
+              local: act.local,
+              visitante: act.visitante,
+              fecha: act.fecha,
+              pabellon: act.pabellon,
+              resultado: act.resultado
+            }).catch(() => {})
+          );
         }
-        return p;
-      });
+      }
 
-      if (huboIdReal) {
-        guardarPartidosLocal(listaActualizada);
+      const altIdxStart = tareas.length;
+      for (const nuevo of nuevosParaAlta) {
+        tareas.push(
+          addDoc(collection(db, 'partidos'), {
+            ...nuevo.datos,
+            asistentes: [],
+            createdAt: serverTimestamp()
+          })
+        );
+      }
+
+      if (tareas.length > 0) {
+        const settled = await Promise.allSettled(tareas);
+        let huboIdReal = false;
+        const mapaIdsReales = new Map();
+
+        nuevosParaAlta.forEach((nuevo, i) => {
+          const res = settled[altIdxStart + i];
+          if (res?.status === 'fulfilled' && res.value?.id) {
+            mapaIdsReales.set(nuevo.idTemporal, res.value.id);
+            huboIdReal = true;
+          }
+        });
+
+        if (huboIdReal) {
+          guardarPartidosLocal(
+            listaTrabajo.map((p) =>
+              mapaIdsReales.has(p.id) ? { ...p, id: mapaIdsReales.get(p.id) } : p
+            )
+          );
+        }
       }
     }
 
-    return unicos.length;
+    return {
+      añadidos: nuevosParaAlta.length,
+      actualizados: actualizadosFirestore.length
+    };
   };
 
   const registrarClasificacionSinDuplicar = async (candidatos) => {
@@ -2509,48 +2636,102 @@ export default function App() {
     guardarLocalSeguro('cdra_urls_partidos', actualizada);
   };
 
-  const handleSincronizarUrls = async () => {
+  const sincronizarPartidosDesdeWebs = async (mostrarAvisoResultado = true) => {
     if (urlsSincronizacion.length === 0) {
-      alert('Añade al menos una URL primero.');
+      if (mostrarAvisoResultado) {
+        alert('Añade al menos una URL primero.');
+      }
       return;
     }
     setSincronizandoUrls(true);
     try {
-      const resp = await fetch('/api/sincronizar-partidos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls: urlsSincronizacion })
-      });
-      const data = await resp.json();
+      let partidosDetectados = [];
+      let clasifDetectada = [];
+      let huboRespuestaEndpoint = false;
+      let motivosError = [];
 
-      if (!resp.ok || !data.ok) {
-        alert(data.error || 'No se pudo completar la sincronización automática.');
-        return;
+      try {
+        const resp = await fetch('/api/sincronizar-partidos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: urlsSincronizacion })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.ok) {
+            huboRespuestaEndpoint = true;
+            partidosDetectados = Array.isArray(data.partidos) ? data.partidos : [];
+            clasifDetectada = Array.isArray(data.clasificacion) ? data.clasificacion : [];
+            if (Array.isArray(data.errores) && data.errores.length > 0) {
+              motivosError = data.errores.map((e) => e.motivo).filter(Boolean);
+            }
+          }
+        }
+      } catch {
+        // Si no existe endpoint /api/sincronizar-partidos, probamos lectura directa
       }
 
-      const añadidos = await registrarPartidosSinDuplicar(data.partidos || []);
-      const añadidosTabla = await registrarClasificacionSinDuplicar(data.clasificacion || []);
-      const avisoBloqueos =
-        data.errores && data.errores.length > 0
-          ? `\nNota: algunas webs cargan contenido dinámico o restringen lectura directa (${data.errores.map((e) => e.motivo).join(', ')}). Usa "Pegar texto" para esas.`
-          : '';
+      if (!huboRespuestaEndpoint || partidosDetectados.length === 0) {
+        for (const urlObjetivo of urlsSincronizacion) {
+          try {
+            const r = await fetch(urlObjetivo);
+            if (!r.ok) continue;
+            const cuerpo = await r.text();
+            const extraidos = cuerpo.trim().startsWith('<')
+              ? parsearPartidosDesdeHtml(cuerpo)
+              : parsearPartidosDesdeTexto(cuerpo);
+            if (extraidos.length > 0) {
+              partidosDetectados = [...partidosDetectados, ...extraidos];
+            }
+          } catch {
+            // Bloqueo CORS o carga dinámica en cliente
+          }
+        }
+      }
 
-      alert(
-        añadidos > 0 || añadidosTabla > 0
-          ? `¡Listo! Se añadieron ${añadidos} partido(s) y ${añadidosTabla} equipo(s) en clasificación sin duplicados.${avisoBloqueos}`
-          : `Todo al día: no había novedades que añadir (0 duplicados).${avisoBloqueos}`
-      );
+      await cargarDatosUnaVez(true, false);
+
+      const { añadidos, actualizados } = await registrarPartidosSinDuplicar(partidosDetectados);
+      if (clasifDetectada.length > 0) {
+        await registrarClasificacionSinDuplicar(clasifDetectada);
+      }
+
+      if (mostrarAvisoResultado) {
+        const avisoBloqueos =
+          motivosError.length > 0 && añadidos === 0 && actualizados === 0
+            ? `\nNota: la web puede cargar datos dinámicos o restringir lectura directa (${motivosError.join(', ')}). Puedes usar "Pegar texto" si falta algún partido.`
+            : '';
+
+        if (añadidos > 0 || actualizados > 0) {
+          alert(
+            `¡Partidos actualizados! ${añadidos} partido(s) nuevo(s) y ${actualizados} partido(s) jugado(s)/modificado(s) sincronizados.${avisoBloqueos}`
+          );
+        } else {
+          alert(`Partidos revisados y al día: no había cambios ni partidos nuevos.${avisoBloqueos}`);
+        }
+      }
     } catch {
-      alert('No se pudo conectar con /api/sincronizar-partidos. Usa el cuadro de "Pegar texto" si estás probando en local.');
+      if (mostrarAvisoResultado) {
+        alert('No se pudo completar la sincronización automática. Usa "Pegar texto" si la web bloquea la lectura directa.');
+      }
     } finally {
       setSincronizandoUrls(false);
     }
   };
 
+  const handleSincronizarUrls = async () => {
+    await sincronizarPartidosDesdeWebs(true);
+  };
+
   const handleAddPartido = async (e) => {
     e.preventDefault();
     if (!nuevoPartido.visitante) return;
-    const item = { ...nuevoPartido, asistentes: [], createdAt: serverTimestamp() };
+    const item = {
+      ...nuevoPartido,
+      resultado: normalizarMarcadorPartido(nuevoPartido.resultado),
+      asistentes: [],
+      createdAt: serverTimestamp()
+    };
     const idTemporal = `part_${Date.now()}`;
     const actualizada = [{ id: idTemporal, ...item }, ...partidos];
     guardarPartidosLocal(actualizada);
@@ -2581,15 +2762,15 @@ export default function App() {
       return;
     }
 
-    const añadidos = await registrarPartidosSinDuplicar(parseados);
-    if (añadidos === 0) {
-      alert('Esos partidos ya estaban registrados en la app (0 duplicados).');
+    const { añadidos, actualizados } = await registrarPartidosSinDuplicar(parseados);
+    if (añadidos === 0 && actualizados === 0) {
+      alert('Esos partidos ya estaban registrados sin cambios (0 duplicados).');
       return;
     }
 
     setTextoImportarPartidos('');
     setShowImportBox(false);
-    alert(`¡Se importaron ${añadidos} partido(s) nuevo(s) sin duplicados!`);
+    alert(`¡Listo! ${añadidos} partido(s) nuevo(s) y ${actualizados} partido(s) actualizado(s).`);
   };
 
   const handleAddEquipoTabla = async (e) => {
@@ -2886,6 +3067,8 @@ export default function App() {
   const renderTarjetaPartido = (p, yaJugado = false) => {
     const asistentes = p.asistentes || [];
     const voy = asistentes.includes(perfil.nombre);
+    const marcadorVisible = normalizarMarcadorPartido(p.resultado || 'VS');
+    const esMarcadorJugado = marcadorVisible !== 'VS' || yaJugado;
 
     const fechaRescatada =
       (p.fecha && !/^(próximamente|proximamente|por confirmar)$/i.test(String(p.fecha).trim())
@@ -2918,18 +3101,23 @@ export default function App() {
       <div
         key={p.id}
         className="card"
-        style={yaJugado ? { opacity: 0.9 } : undefined}
+        style={esMarcadorJugado ? { borderLeft: '4px solid var(--primary)' } : undefined}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span className={`tag ${p.resultado !== 'VS' ? 'result' : ''}`}>
+            <span className={`tag ${esMarcadorJugado ? 'result' : ''}`}>
               <TextoConSignoGenero texto={p.categoria} />
             </span>
-            {yaJugado && (
-              <span className="tag" style={{ background: '#e2e8f0', color: '#475569' }}>
-                Jugado
-              </span>
-            )}
+            <span
+              className="tag"
+              style={
+                esMarcadorJugado
+                  ? { background: '#dcfce7', color: '#166534' }
+                  : { background: '#eff6ff', color: '#1e3a8a' }
+              }
+            >
+              {esMarcadorJugado ? 'Jugado' : 'Por jugar'}
+            </span>
           </div>
           {isAdmin && (
             <button className="btn-danger" onClick={() => handleDelete('partidos', p.id)}>
@@ -2939,7 +3127,16 @@ export default function App() {
         </div>
         <div className="match-teams">
           <span style={{ flex: 1 }}>{localTexto}</span>
-          <span className="match-score">{p.resultado || 'VS'}</span>
+          <span
+            className="match-score"
+            style={
+              esMarcadorJugado
+                ? { background: '#1e3a8a', color: '#ffffff' }
+                : undefined
+            }
+          >
+            {marcadorVisible}
+          </span>
           <span style={{ flex: 1, textAlign: 'right' }}>{visitanteTexto}</span>
         </div>
         <div className="match-meta">
@@ -3461,44 +3658,56 @@ export default function App() {
           <div>
             <div className="section-header">
               <h2 className="section-title"><Calendar size={19} /> Partidos y Asistencia</h2>
-              {isAdmin && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn-rsvp"
-                    onClick={handleLimpiarDuplicadosPartidos}
-                  >
-                    <CopyX size={14} /> Limpiar duplicados
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-rsvp"
-                    onClick={handleLimpiarPartidosSinRival}
-                  >
-                    <Trash2 size={14} /> Limpiar fechas
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-rsvp"
-                    onClick={() => {
-                      setShowImportBox(!showImportBox);
-                      setShowForm(false);
-                    }}
-                  >
-                    <Download size={14} /> Importar
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => {
-                      setShowForm(!showForm);
-                      setShowImportBox(false);
-                    }}
-                  >
-                    <Plus size={15} /> Partido
-                  </button>
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-rsvp"
+                  disabled={sincronizandoUrls || refrescandoDatos}
+                  onClick={() => sincronizarPartidosDesdeWebs(true)}
+                  title="Actualizar partidos por jugar y jugados desde las webs vinculadas"
+                >
+                  <RefreshCw size={14} />
+                  {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
+                </button>
+                {isAdmin && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-rsvp"
+                      onClick={handleLimpiarDuplicadosPartidos}
+                    >
+                      <CopyX size={14} /> Limpiar duplicados
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-rsvp"
+                      onClick={handleLimpiarPartidosSinRival}
+                    >
+                      <Trash2 size={14} /> Limpiar fechas
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-rsvp"
+                      onClick={() => {
+                        setShowImportBox(!showImportBox);
+                        setShowForm(false);
+                      }}
+                    >
+                      <Download size={14} /> Importar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        setShowForm(!showForm);
+                        setShowImportBox(false);
+                      }}
+                    >
+                      <Plus size={15} /> Partido
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="subtabs">
@@ -3507,7 +3716,7 @@ export default function App() {
                 className={`subtab ${partidosSubtab === 'proximos' ? 'active' : ''}`}
                 onClick={() => setPartidosSubtab('proximos')}
               >
-                Próximos ({partidosProximos.length})
+                Por jugar ({partidosProximos.length})
               </button>
               <button
                 type="button"
@@ -3576,7 +3785,7 @@ export default function App() {
 
                 <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
                   <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                    Pega aquí las jornadas o enfrentamientos de El balón de la Comunitat, Futbuteo o FFCV y se añadirán sin duplicar:
+                    Pega aquí las jornadas o enfrentamientos de Futbuteo, El balón de la Comunitat o FFCV y se añadirán o actualizarán sin duplicar:
                   </p>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
@@ -3595,7 +3804,7 @@ export default function App() {
                     required
                   />
                   <button type="submit" className="btn-rsvp" style={{ justifyContent: 'center' }}>
-                    <Download size={14} /> Añadir partidos pegados
+                    <Download size={14} /> Añadir o actualizar partidos pegados
                   </button>
                 </form>
               </div>
@@ -3620,7 +3829,7 @@ export default function App() {
               <div>
                 {partidosProximos.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                    No hay próximos partidos programados por ahora.
+                    No hay partidos por jugar programados por ahora.
                   </div>
                 ) : (
                   partidosProximos.map((p) => renderTarjetaPartido(p, false))
