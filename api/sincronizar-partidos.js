@@ -13,6 +13,26 @@ const MESES_MAPA = {
   dic: '12', diciembre: '12', dec: '12'
 };
 
+function obtenerAnioTemporadaPorDefecto(mesNumStr = '') {
+  const ahora = new Date();
+  const anioActual = ahora.getFullYear();
+  const mesActual = ahora.getMonth() + 1; // 1..12
+  const mesPartido = Number(mesNumStr);
+
+  if (mesPartido >= 1 && mesPartido <= 12) {
+    // Si estamos en el tramo final del año (p. ej. nov-dic) y aparece un mes de primera mitad (ene-jun), suele ser el año siguiente
+    if (mesActual >= 8 && mesPartido <= 6) {
+      return String(anioActual + 1);
+    }
+    // Si estamos en la primera mitad del año (ene-jul) y aparece un mes de otoño (sep-dic), suele ser el año anterior
+    if (mesActual <= 7 && mesPartido >= 9) {
+      return String(anioActual - 1);
+    }
+  }
+
+  return String(anioActual);
+}
+
 function limpiarTexto(str = '') {
   return String(str)
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -67,7 +87,7 @@ function extraerFechaFlexible(texto = '') {
   if (numMatch) {
     const d = numMatch[1].padStart(2, '0');
     const m = numMatch[2].padStart(2, '0');
-    let y = numMatch[3] || '2026';
+    let y = numMatch[3] || obtenerAnioTemporadaPorDefecto(m);
     if (y.length === 2) y = `20${y}`;
     const fechaBase = `${d}-${m}-${y}`;
     return hora ? `${fechaBase} · ${hora}` : fechaBase;
@@ -80,14 +100,14 @@ function extraerFechaFlexible(texto = '') {
     const d = mesMatch[1].padStart(2, '0');
     const mesClave = mesMatch[2].toLowerCase();
     const m = MESES_MAPA[mesClave] || mesClave;
-    let y = mesMatch[3] || '2026';
+    let y = mesMatch[3] || obtenerAnioTemporadaPorDefecto(m);
     if (y.length === 2) y = `20${y}`;
     const fechaBase = `${d}-${m}-${y}`;
     return hora ? `${fechaBase} · ${hora}` : fechaBase;
   }
 
   if (hora) {
-    return /proximo\s+partido/i.test(low) ? `Próximo partido · ${hora}` : `27-11-2026 · ${hora}`;
+    return /proximo\s+partido/i.test(low) ? `Próximo partido · ${hora}` : `Hoy · ${hora}`;
   }
 
   if (/proximo\s+partido/i.test(low)) {
@@ -501,3 +521,203 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: e?.message || 'Error interno' });
   }
 }
+```[cite: 32]
+
+---
+
+### 2. `public/manifest.json` (completo)
+
+```json
+{
+  "name": "C.D. Rafael Altamira Picanya FS",
+  "short_name": "Altamira FS",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#111827",
+  "description": "Aplicación web progresiva (PWA) del C.D. Rafael Altamira Picanya FS",
+  "icons": [
+    {
+      "src": "/escudo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/escudo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+```[cite: 34]
+
+---
+
+### 3. `public/sw.js` (completo)
+
+```javascript
+const CACHE_NAME = "altamira-fs-cache-v2";
+const ARCHIVOS_BASE = [
+  "/",
+  "/index.html",
+  "/manifest.json",
+  "/escudo.png"
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(ARCHIVOS_BASE))
+      .catch(() => Promise.resolve())
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
+
+  const esArchivoEstatico =
+    request.destination === "image" ||
+    request.destination === "style" ||
+    request.destination === "script" ||
+    url.pathname === "/manifest.json" ||
+    url.pathname === "/escudo.png";
+
+  if (esArchivoEstatico) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response && response.status === 200) {
+            const copia = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const copia = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request))
+  );
+});
+```[cite: 31]
+
+---
+
+### 4. `src/main.jsx` (completo)
+
+```javascript
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import "./index.css";
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```[cite: 27]
+
+---
+
+### 5. `src/firebase.js` (completo)
+
+```javascript
+import { initializeApp } from "firebase/app";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "TU_API_KEY",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "cd-rafael-altamira-picanya-fs.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "cd-rafael-altamira-picanya-fs",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "cd-rafael-altamira-picanya-fs.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "TU_MESSAGING_SENDER_ID",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "TU_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
+```[cite: 30]
+
+---
+
+### 6. `package.json` y `vite.config.js` (completos)
+
+```json
+{
+  "name": "cd-rafael-altamira-picanya-fs",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^10.14.1",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
+```[cite: 23]
+
+```javascript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
+```[cite: 22]
+
+¿Necesitas también el código completo de `src/index.css` o algún otro archivo?
