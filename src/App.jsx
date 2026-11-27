@@ -186,7 +186,7 @@ function obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTexto = '') {
 
 function esNombreInvalidoOResidual(texto) {
   const limpio = String(texto || '')
-    .replace(/["""'']/g, '')
+    .replace(/["'’]/g, '')
     .trim();
   if (!limpio || limpio.length < 3) return true;
   if (/^[ab]$/i.test(limpio)) return true;
@@ -522,7 +522,7 @@ function normalizarNombreEquipoClasificacion(nombre) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/["""'']/g, '')
+    .replace(/["'’]/g, '')
     .replace(/\b(c\.?d\.?|c\.?f\.?s?\.?|f\.?s\.?|futsal|club|deportivo)\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
@@ -594,7 +594,7 @@ function sanearNombreEquipoTabla(entrada) {
       const candidata = limpio.slice(0, len).trim();
       if (!candidata) continue;
       const escaped = candidata.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regexRepetido = new RegExp(`^${escaped}\\s+${escaped}(?:\\s+${escaped})*$`, 'i');
+      const regexRepetido = new RegExp(`^${escaped}\s+${escaped}(?:\s+${escaped})*$`, 'i');
       if (regexRepetido.test(limpio)) {
         limpio = candidata;
         break;
@@ -739,7 +739,7 @@ function parsearClasificacionDesdeTexto(textoCrudo, categoriaForzada = '') {
       continue;
     }
 
-    const matchConPos = limpiaForma.match(/^(\d{1,2})\s*[.)-]?\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,8})$/);
+    const matchConPos = limpiaForma.match(/^(\d{1,2})\s*[.)-]??\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,8})$/);
     if (matchConPos) {
       const posNum = Number(matchConPos[1]);
       const equipoNombre = sanearNombreEquipoTabla([matchConPos[2]]);
@@ -2588,7 +2588,7 @@ export default function App() {
 
     setTextoImportarClasificacion('');
     setShowImportTablaBox(false);
-    alert(`¡Clasificación sincronizada (${procesados} fila(s)) en ${catDestino}!`);
+    alert(`¡Clasificación actualizada (${procesados} fila(s)) en ${catDestino}!`);
   };
 
   const handleSubirEscudoEquipo = async (equipoItem, file) => {
@@ -3175,24 +3175,14 @@ export default function App() {
   };
 
   const renderSelectorCategorias = () => (
-    <div
-      style={{
-        display: 'flex',
-        gap: 6,
-        overflowX: 'auto',
-        paddingBottom: 6,
-        marginBottom: 10,
-        scrollbarWidth: 'thin'
-      }}
-    >
+    <div className="category-bar">
       {categoriasDisponibles.map((cat) => {
         const activa = normalizarCategoria(categoriaActiva) === normalizarCategoria(cat);
         return (
           <button
             key={cat}
             type="button"
-            className={`subtab ${activa ? 'active' : ''}`}
-            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+            className={`subtab category-pill ${activa ? 'active' : ''}`}
             onClick={() => seleccionarCategoria(cat)}
           >
             <TextoConSignoGenero texto={cat} />
@@ -3225,71 +3215,28 @@ export default function App() {
             setPartidoSeleccionadoId(p.id);
           }
         }}
-        className="card"
-        style={{
-          padding: '10px 12px',
-          marginBottom: 8,
-          cursor: 'pointer',
-          borderLeft: esMarcadorJugado ? '4px solid var(--primary)' : '4px solid #3b82f6'
-        }}
+        className={`card match-compact-card ${esMarcadorJugado ? 'is-played' : 'is-upcoming'}`}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span
-            className="tag"
-            style={{
-              fontSize: 11,
-              padding: '2px 7px',
-              ...(esMarcadorJugado
-                ? { background: '#dcfce7', color: '#166534' }
-                : { background: '#eff6ff', color: '#1e3a8a' })
-            }}
-          >
+        <div className="match-compact-top">
+          <span className={`tag match-status-tag ${esMarcadorJugado ? 'result' : 'upcoming'}`}
             {esMarcadorJugado ? 'Jugado' : 'Por jugar'}
           </span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>
-            Ver detalle ›
-          </span>
+          <span className="match-detail-link">Ver detalle ›</span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>
-            {localTexto}
-          </span>
-          <span
-            className="match-score"
-            style={{
-              padding: '3px 8px',
-              fontSize: 12,
-              flexShrink: 0,
-              ...(esMarcadorJugado
-                ? { background: '#1e3a8a', color: '#ffffff' }
-                : undefined)
-            }}
-          >
+        <div className="match-compact-teams">
+          <span className="match-team-home">{localTexto}</span>
+          <span className={`match-score match-score-compact ${esMarcadorJugado ? 'played' : ''}`}
             {marcadorVisible}
           </span>
-          <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>
-            {visitanteTexto}
-          </span>
+          <span className="match-team-away">{visitanteTexto}</span>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 7,
-            paddingTop: 6,
-            borderTop: '1px solid #f1f5f9',
-            fontSize: 12,
-            color: 'var(--muted)'
-          }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <div className="match-compact-footer">
+          <span className="match-compact-time">
             <Clock size={12} /> {fechaRescatada}
           </span>
-          <span style={{ fontWeight: 600, color: voy ? '#166534' : 'var(--muted)' }}>
+          <span className={`match-compact-rsvp ${voy ? 'going' : ''}`}
             {voy ? '✓ Voy' : `${asistentes.length} conv.`}
           </span>
         </div>
@@ -3312,42 +3259,13 @@ export default function App() {
     } = obtenerDatosFormateadosPartido(partidoModal, esPartidoYaJugado(partidoModal));
 
     return (
-      <div
-        onClick={() => setPartidoSeleccionadoId(null)}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 23, 42, 0.65)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 16,
-          zIndex: 999
-        }}
-      >
-        <div
-          className="card"
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: '100%',
-            maxWidth: 440,
-            padding: 18,
-            marginBottom: 0,
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span
-              className="tag"
-              style={
-                esMarcadorJugado
-                  ? { background: '#dcfce7', color: '#166534' }
-                  : { background: '#eff6ff', color: '#1e3a8a' }
-              }
-            >
+      <div className="modal-backdrop" onClick={() => setPartidoSeleccionadoId(null)}>
+        <div className="card modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <span className={`tag ${esMarcadorJugado ? 'result' : 'upcoming'}`}
               {esMarcadorJugado ? 'Partido jugado' : 'Próximo partido'}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="modal-header-actions">
               {isAdmin && (
                 <button
                   type="button"
@@ -3359,88 +3277,48 @@ export default function App() {
               )}
               <button
                 type="button"
+                className="modal-close-btn"
                 onClick={() => setPartidoSeleccionadoId(null)}
-                style={{
-                  background: '#f1f5f9',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '5px 10px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  color: '#0f172a'
-                }}
               >
                 ✕ Cerrar
               </button>
             </div>
           </div>
 
-          <div
-            style={{
-              background: '#f8fafc',
-              borderRadius: 12,
-              padding: 14,
-              border: '1px solid var(--border)',
-              marginBottom: 14
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', textAlign: 'center', marginBottom: 8 }}>
-              Equipos enfrentados
-            </div>
-            <div className="match-teams" style={{ margin: 0 }}>
-              <span style={{ flex: 1, fontSize: 15 }}>{localTexto}</span>
-              <span
-                className="match-score"
-                style={{
-                  fontSize: 15,
-                  padding: '6px 12px',
-                  ...(esMarcadorJugado
-                    ? { background: '#1e3a8a', color: '#ffffff' }
-                    : undefined)
-                }}
-              >
+          <div className="modal-scoreboard">
+            <div className="modal-scoreboard-label">Equipos enfrentados</div>
+            <div className="match-teams modal-teams">
+              <span className="modal-team-home">{localTexto}</span>
+              <span className={`match-score modal-score ${esMarcadorJugado ? 'played' : ''}`}
                 {marcadorVisible}
               </span>
-              <span style={{ flex: 1, textAlign: 'right', fontSize: 15 }}>{visitanteTexto}</span>
+              <span className="modal-team-away">{visitanteTexto}</span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <div className="modal-meta-list">
+            <div className="modal-meta-item">
               <Clock size={16} color="#1e3a8a" />
               <span><strong>Fecha y hora:</strong> {fechaRescatada}</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, fontSize: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <MapPin size={16} color="#1e3a8a" style={{ marginTop: 2, flexShrink: 0 }} />
-                <span><strong>Dónde se juega:</strong> {pabellonTexto}</span>
-              </div>
+            <div className="modal-meta-item">
+              <MapPin size={16} color="#1e3a8a" className="modal-meta-icon" />
+              <span><strong>Dónde se juega:</strong> {pabellonTexto}</span>
             </div>
 
             <a
               href={urlMaps}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary"
-              style={{ textDecoration: 'none', justifyContent: 'center' }}
+              className="btn-primary modal-maps-btn"
             >
               <Navigation size={14} /> Abrir ubicación en Google Maps
             </a>
           </div>
 
-          <div
-            style={{
-              paddingTop: 12,
-              borderTop: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 8,
-              flexWrap: 'wrap'
-            }}
-          >
-            <span style={{ fontSize: 13 }}>
+          <div className="modal-rsvp-bar">
+            <span className="modal-rsvp-count">
               Convocados: <strong>{asistentes.length}</strong>
             </span>
             <button
@@ -3465,17 +3343,17 @@ export default function App() {
     return (
       <div key={obtenerClaveUnicaPerfil(item)} className="card player-row">
         <div className="player-info">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <div className="player-avatar-col">
             <AvatarCircular src={item.foto} alt={item.nombre} letra={item.nombre?.[0] || 'U'} tamano={46} />
             {!esEspecialItem && dorsalItem && dorsalItem !== '0' && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{dorsalItem}</span>
+              <span className="player-dorsal-label">#{dorsalItem}</span>
             )}
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>
+            <div className="player-name">
               {item.nombre} {esUsuarioActual ? '(Tú)' : ''}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <div className="player-sub">
               {esEspecialItem ? (
                 <TextoConSignoGenero texto={item.categoria || item.rol} />
               ) : (
@@ -3486,8 +3364,8 @@ export default function App() {
               )}
             </div>
             {puedeVerTelefonosPrivados && !esEspecialItem && telefonoItem && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginTop: 2 }}>
-                <a href={`tel:${telefonoItem}`} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <div className="player-phone">
+                <a href={`tel:${telefonoItem}`} className="player-phone-link">
                   <Phone size={12} /> {telefonoItem}
                 </a>
               </div>
@@ -3529,24 +3407,24 @@ export default function App() {
 
         <main className="container">
           {!modoRegistroJugador ? (
-            <form className="card" onSubmit={handleIniciarSesion} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+            <form className="card auth-card" onSubmit={handleIniciarSesion}>
               <div className="section-title">
                 <Lock size={19} /> Iniciar Sesión
               </div>
-              <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.4 }}>
+              <p className="auth-help">
                 Entra con tu <strong>nombre o seudónimo</strong> y tu <strong>contraseña / PIN</strong> (o usa el PIN inicial <strong>1234</strong> para configurar un perfil nuevo).
               </p>
               <input
                 type="text"
                 placeholder="Nombre o seudónimo *"
-                style={{ width: '100%', padding: 11, borderRadius: 8, border: '1px solid var(--border)', fontSize: 15 }}
+                className="auth-input auth-input-lg"
                 value={identificadorLoginInput}
                 onChange={(e) => setIdentificadorLoginInput(e.target.value)}
               />
               <input
                 type="password"
                 placeholder="Contraseña o PIN * (inicio: 1234)"
-                style={{ width: '100%', padding: 11, borderRadius: 8, border: '1px solid var(--border)', fontSize: 15 }}
+                className="auth-input auth-input-lg"
                 value={pinLoginInput}
                 onChange={(e) => setPinLoginInput(e.target.value)}
                 required
@@ -3554,8 +3432,7 @@ export default function App() {
               <button type="submit" className="btn-primary">Entrar</button>
               <button
                 type="button"
-                className="btn-rsvp"
-                style={{ justifyContent: 'center', marginTop: 4 }}
+                className="btn-rsvp auth-secondary-btn"
                 onClick={() => {
                   setModoRegistroJugador(true);
                   setFormNombre('');
@@ -3572,39 +3449,39 @@ export default function App() {
               </button>
             </form>
           ) : (
-            <form className="card" onSubmit={handleGuardarConfiguracionObligatoria} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+            <form className="card auth-card auth-card-register" onSubmit={handleGuardarConfiguracionObligatoria}>
               <div className="section-title">
                 <UserPlus size={19} /> Registro de Jugador
               </div>
-              <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+              <p className="auth-note">
                 Los campos con * son obligatorios. La foto es <strong>opcional</strong>. Tu teléfono solo será visible para Directiva y entrenadores.
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+              <div className="avatar-upload-box">
                 <AvatarCircular
                   src={formFoto}
                   alt="Vista previa"
                   letra={formNombre?.[0] || 'J'}
                   tamano={72}
                 />
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                <div className="avatar-dorsal-preview">
                   Dorsal: #{formDorsal || '-'}
                 </div>
-                <label className="btn-primary" style={{ cursor: 'pointer' }}>
+                <label className="btn-primary file-upload-label">
                   <Camera size={15} /> Subir foto (opcional)
                   <input
                     type="file"
                     accept="image/*"
-                    style={{ display: 'none' }}
+                    className="file-input-hidden"
                     onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setFormFoto(dataUrl))}
                   />
                 </label>
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Nombre o seudónimo *</label>
+              <div className="field-group">
+                <label className="field-label">Nombre o seudónimo *</label>
                 <input
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  className="field-input"
                   placeholder="Ej. Dani o Daniel López *"
                   value={formNombre}
                   onChange={(e) => setFormNombre(e.target.value)}
@@ -3612,10 +3489,10 @@ export default function App() {
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Número de dorsal *</label>
+              <div className="field-group">
+                <label className="field-label">Número de dorsal *</label>
                 <input
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  className="field-input"
                   placeholder="Ej. 10 *"
                   value={formDorsal}
                   onChange={(e) => setFormDorsal(e.target.value)}
@@ -3623,13 +3500,13 @@ export default function App() {
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Edad *</label>
+              <div className="field-group">
+                <label className="field-label">Edad *</label>
                 <input
                   type="number"
                   min="1"
                   max="99"
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  className="field-input"
                   placeholder="Ej. 16 *"
                   value={formEdad}
                   onChange={(e) => setFormEdad(e.target.value)}
@@ -3637,11 +3514,11 @@ export default function App() {
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Teléfono de contacto (ficha del club) *</label>
+              <div className="field-group">
+                <label className="field-label">Teléfono de contacto (ficha del club) *</label>
                 <input
                   type="tel"
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  className="field-input"
                   placeholder="Ej. 600123456 *"
                   value={formTelefono}
                   onChange={(e) => setFormTelefono(e.target.value)}
@@ -3649,19 +3526,19 @@ export default function App() {
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+              <div className="field-group">
+                <label className="field-label">Equipo / Categoría *</label>
                 <SelectorCategoriaYGenero
                   valorActual={formCategoria}
                   onChangeValor={(val) => setFormCategoria(val)}
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Contraseña / PIN personal (mín. 4 caracteres) *</label>
+              <div className="field-group">
+                <label className="field-label">Contraseña / PIN personal (mín. 4 caracteres) *</label>
                 <input
                   type="password"
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  className="field-input"
                   placeholder="Tu contraseña o PIN *"
                   value={formPinNuevo}
                   onChange={(e) => setFormPinNuevo(e.target.value)}
@@ -3669,11 +3546,11 @@ export default function App() {
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Confirmar contraseña / PIN *</label>
+              <div className="field-group">
+                <label className="field-label">Confirmar contraseña / PIN *</label>
                 <input
                   type="password"
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                  className="field-input"
                   placeholder="Repite tu contraseña o PIN *"
                   value={formPinConfirm}
                   onChange={(e) => setFormPinConfirm(e.target.value)}
@@ -3684,8 +3561,7 @@ export default function App() {
               <button type="submit" className="btn-primary">Completar Registro y Entrar</button>
               <button
                 type="button"
-                className="btn-rsvp"
-                style={{ justifyContent: 'center' }}
+                className="btn-rsvp auth-secondary-btn"
                 onClick={() => setModoRegistroJugador(false)}
               >
                 Volver a Iniciar Sesión
@@ -3726,12 +3602,12 @@ export default function App() {
         </header>
 
         <main className="container">
-          <form className="card" onSubmit={handleGuardarConfiguracionObligatoria} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+          <form className="card onboarding-form" onSubmit={handleGuardarConfiguracionObligatoria}>
             <div className="section-title">
               <KeyRound size={19} /> {editandoEspecial ? `Editar Perfil (${formRol})` : 'Completa tu Perfil de Jugador'}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+            <div className="avatar-upload-box">
               <AvatarCircular
                 src={formFoto}
                 alt="Vista previa"
@@ -3739,25 +3615,25 @@ export default function App() {
                 tamano={72}
               />
               {!editandoEspecial && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                <div className="avatar-dorsal-preview">
                   Dorsal: #{formDorsal || '-'}
                 </div>
               )}
-              <label className="btn-primary" style={{ cursor: 'pointer' }}>
+              <label className="btn-primary file-upload-label">
                 <Camera size={15} /> Subir foto (opcional)
                 <input
                   type="file"
                   accept="image/*"
-                  style={{ display: 'none' }}
+                  className="file-input-hidden"
                   onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setFormFoto(dataUrl))}
                 />
               </label>
             </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Nombre o seudónimo *</label>
+            <div className="field-group">
+              <label className="field-label">Nombre o seudónimo *</label>
               <input
-                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                className="field-input"
                 placeholder="Nombre o seudónimo *"
                 value={formNombre}
                 onChange={(e) => setFormNombre(e.target.value)}
@@ -3767,10 +3643,10 @@ export default function App() {
 
             {!editandoEspecial && (
               <>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Número de dorsal *</label>
+                <div className="field-group">
+                  <label className="field-label">Número de dorsal *</label>
                   <input
-                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    className="field-input"
                     placeholder="Ej. 10 *"
                     value={formDorsal}
                     onChange={(e) => setFormDorsal(e.target.value)}
@@ -3778,13 +3654,13 @@ export default function App() {
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Edad *</label>
+                <div className="field-group">
+                  <label className="field-label">Edad *</label>
                   <input
                     type="number"
                     min="1"
                     max="99"
-                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    className="field-input"
                     placeholder="Ej. 16 *"
                     value={formEdad}
                     onChange={(e) => setFormEdad(e.target.value)}
@@ -3792,11 +3668,11 @@ export default function App() {
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Teléfono de contacto (ficha del club) *</label>
+                <div className="field-group">
+                  <label className="field-label">Teléfono de contacto (ficha del club) *</label>
                   <input
                     type="tel"
-                    style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                    className="field-input"
                     placeholder="Ej. 600123456 *"
                     value={formTelefono}
                     onChange={(e) => setFormTelefono(e.target.value)}
@@ -3804,8 +3680,8 @@ export default function App() {
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Equipo / Categoría *</label>
+                <div className="field-group">
+                  <label className="field-label">Equipo / Categoría *</label>
                   <SelectorCategoriaYGenero
                     valorActual={formCategoria}
                     onChangeValor={(val) => setFormCategoria(val)}
@@ -3814,11 +3690,11 @@ export default function App() {
               </>
             )}
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Contraseña / PIN personal (mín. 4, distinto de 1234) *</label>
+            <div className="field-group">
+              <label className="field-label">Contraseña / PIN personal (mín. 4, distinto de 1234) *</label>
               <input
                 type="password"
-                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                className="field-input"
                 placeholder="Nueva contraseña o PIN *"
                 value={formPinNuevo}
                 onChange={(e) => setFormPinNuevo(e.target.value)}
@@ -3826,11 +3702,11 @@ export default function App() {
               />
             </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Confirmar contraseña / PIN *</label>
+            <div className="field-group">
+              <label className="field-label">Confirmar contraseña / PIN *</label>
               <input
                 type="password"
-                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', marginTop: 4 }}
+                className="field-input"
                 placeholder="Repite tu contraseña o PIN *"
                 value={formPinConfirm}
                 onChange={(e) => setFormPinConfirm(e.target.value)}
@@ -3908,29 +3784,22 @@ export default function App() {
 
       <main className="container">
         {alertaAvisoEntrante && (
-          <div
-            className="card"
-            style={{
-              border: alertaAvisoEntrante.urgente ? '2px solid var(--danger)' : '2px solid var(--primary)',
-              background: alertaAvisoEntrante.urgente ? '#fef2f2' : '#eff6ff',
-              marginBottom: 12
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span className={`tag ${alertaAvisoEntrante.urgente ? 'urgent' : ''}`}>
+          <div className={`card alert-banner ${alertaAvisoEntrante.urgente ? 'is-urgent' : 'is-normal'}`}
+            <div className="alert-banner-top">
+              <span className={`tag ${alertaAvisoEntrante.urgente ? 'urgent' : ''}`}
                 {alertaAvisoEntrante.urgente ? '🚨 Aviso Urgente' : '🔔 Nuevo Aviso del Club'}
               </span>
               <button
                 type="button"
+                className="alert-banner-close"
                 onClick={() => setAlertaAvisoEntrante(null)}
-                style={{ background: 'none', border: 'none', fontWeight: 700, cursor: 'pointer', color: '#475569' }}
               >
                 ✕
               </button>
             </div>
-            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{alertaAvisoEntrante.titulo}</div>
-            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.4 }}>{alertaAvisoEntrante.mensaje}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+            <div className="alert-banner-title">{alertaAvisoEntrante.titulo}</div>
+            <div className="alert-banner-body">{alertaAvisoEntrante.mensaje}</div>
+            <div className="alert-banner-author">
               Publicado por {alertaAvisoEntrante.autor}
             </div>
           </div>
@@ -3974,7 +3843,7 @@ export default function App() {
             {partidosSubtab === 'proximos' && (
               <div>
                 {partidosProximos.length === 0 ? (
-                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  <div className="card empty-state-card">
                     No hay partidos por jugar en {categoriaActiva} por ahora.
                   </div>
                 ) : (
@@ -3986,7 +3855,7 @@ export default function App() {
             {partidosSubtab === 'jugados' && (
               <div>
                 {partidosJugados.length === 0 ? (
-                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  <div className="card empty-state-card">
                     Aún no hay partidos jugados en {categoriaActiva}.
                   </div>
                 ) : (
@@ -4030,13 +3899,13 @@ export default function App() {
               <>
                 {showImportTablaBox && (
                   <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                    <div className="import-box-title">
                       Actualizar clasificación ({categoriaActiva})
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+                    <p className="import-box-help">
                       Pega aquí las filas de la clasificación (# Equipo Pts PJ PG PE PP GF GC Dif) y pulsa Actualizar:
                     </p>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <div className="import-box-actions">
                       <button
                         type="button"
                         className="btn-rsvp"
@@ -4058,37 +3927,21 @@ export default function App() {
                   </form>
                 )}
 
-                <div
-                  className="card table-wrap"
-                  style={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    overflowX: 'auto',
-                    WebkitOverflowScrolling: 'touch',
-                    padding: '4px 2px'
-                  }}
-                >
-                  <table
-                    style={{
-                      width: '100%',
-                      minWidth: '520px',
-                      borderCollapse: 'collapse',
-                      fontSize: '12px'
-                    }}
-                  >
+                <div className="card table-wrap league-table-wrap">
+                  <table className="league-table">
                     <thead>
                       <tr>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>#</th>
-                        <th style={{ padding: '8px 6px', whiteSpace: 'nowrap', textAlign: 'left', minWidth: '145px' }}>Equipo</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>Pts</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PJ</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PG</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PE</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>PP</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>GF</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>GC</th>
-                        <th style={{ padding: '8px 5px', whiteSpace: 'nowrap', textAlign: 'center' }}>Dif</th>
-                        {isAdmin && <th style={{ padding: '8px 4px', whiteSpace: 'nowrap', textAlign: 'center' }}></th>}
+                        <th className="col-pos">#</th>
+                        <th className="col-team">Equipo</th>
+                        <th className="col-stat">Pts</th>
+                        <th className="col-stat">PJ</th>
+                        <th className="col-stat">PG</th>
+                        <th className="col-stat">PE</th>
+                        <th className="col-stat">PP</th>
+                        <th className="col-stat">GF</th>
+                        <th className="col-stat">GC</th>
+                        <th className="col-stat">Dif</th>
+                        {isAdmin && <th className="col-action"></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -4099,76 +3952,47 @@ export default function App() {
                         const dif = calcularDifClasificacion(gf, gc, c.dif);
                         return (
                           <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700 }}>
+                            <td className="col-pos col-pos-bold">
                               {c.pos || idx + 1}
                             </td>
-                            <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'left', maxWidth: '185px' }}>
-                              <div
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                  maxWidth: '100%',
-                                  verticalAlign: 'middle'
-                                }}
-                              >
+                            <td className="col-team">
+                              <div className="team-cell-inner">
                                 <AvatarCircular
                                   src={c.escudo}
                                   alt={nombreLimpio}
                                   letra={nombreLimpio?.[0] || 'E'}
                                   tamano={24}
                                 />
-                                <span
-                                  title={nombreLimpio}
-                                  style={{
-                                    fontWeight: 600,
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    display: 'inline-block'
-                                  }}
-                                >
+                                <span title={nombreLimpio} className="team-name-truncate">
                                   {nombreLimpio}
                                 </span>
                                 {isAdmin && (
-                                  <label
-                                    title="Subir escudo del equipo"
-                                    style={{
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      padding: 3,
-                                      borderRadius: 6,
-                                      border: '1px solid var(--border)',
-                                      background: '#fff',
-                                      flexShrink: 0
-                                    }}
-                                  >
+                                  <label className="shield-upload-btn" title="Subir escudo del equipo">
                                     <Camera size={11} />
                                     <input
                                       type="file"
                                       accept="image/*"
-                                      style={{ display: 'none' }}
+                                      className="file-input-hidden"
                                       onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
                                     />
                                   </label>
                                 )}
                               </div>
                             </td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
-                              <strong style={{ color: 'var(--primary)' }}>{c.pts ?? 0}</strong>
+                            <td className="col-stat">
+                              <strong className="pts-highlight">{c.pts ?? 0}</strong>
                             </td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pj ?? 0}</td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pg ?? 0}</td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pe ?? 0}</td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{c.pp ?? 0}</td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{gf}</td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>{gc}</td>
-                            <td style={{ padding: '8px 5px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700 }}>
+                            <td className="col-stat">{c.pj ?? 0}</td>
+                            <td className="col-stat">{c.pg ?? 0}</td>
+                            <td className="col-stat">{c.pe ?? 0}</td>
+                            <td className="col-stat">{c.pp ?? 0}</td>
+                            <td className="col-stat">{gf}</td>
+                            <td className="col-stat">{gc}</td>
+                            <td className="col-stat col-dif-bold">
                               {formatearDif(dif)}
                             </td>
                             {isAdmin && (
-                              <td style={{ padding: '8px 4px', whiteSpace: 'nowrap', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <td className="col-action">
                                 <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
                                   <Trash2 size={12} />
                                 </button>
@@ -4188,24 +4012,24 @@ export default function App() {
                 {goleadoresOrdenados.map((j, idx) => (
                   <div key={j.id} className="card player-row">
                     <div className="player-info">
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <div className="player-avatar-col">
                         <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
                         {j.dorsal && j.dorsal !== '0' && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                          <span className="player-dorsal-label">#{j.dorsal}</span>
                         )}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>
+                        <div className="player-name">
                           {idx + 1}º · {j.nombre}
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        <div className="player-sub">
                           <TextoConSignoGenero texto={j.categoria} />
                           {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className="tag result"><Award size={12} style={{ verticalAlign: 'middle' }} /> {j.goles || 0}</span>
+                    <div className="goal-controls">
+                      <span className="tag result"><Award size={12} className="goal-award-icon" /> {j.goles || 0}</span>
                       {puedeGestionarAlaYGoles && (
                         <>
                           <button className="btn-rsvp" onClick={() => sumarGol(j, -1)}>-</button>
@@ -4232,23 +4056,23 @@ export default function App() {
               return (
                 <div key={j.id} className="card player-row">
                   <div className="player-info">
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <div className="player-avatar-col">
                       <AvatarCircular src={j.foto} alt={j.nombre} letra={j.nombre?.[0] || 'J'} tamano={46} />
                       {j.dorsal && j.dorsal !== '0' && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>#{j.dorsal}</span>
+                        <span className="player-dorsal-label">#{j.dorsal}</span>
                       )}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{j.nombre}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      <div className="player-name">{j.nombre}</div>
+                      <div className="player-sub">
                         <TextoConSignoGenero texto={j.categoria} />
                         {edadJugador ? ` · ${edadJugador} años` : ''}
                         {puedeGestionarAlaYGoles && j.posicion && j.posicion !== 'Sin asignar' ? ` · ${j.posicion}` : ''}
                         {puedeGestionarAlaYGoles ? ` · ${j.goles || 0} goles` : ''}
                       </div>
                       {puedeVerTelefonosPrivados && telJugador && (
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', marginTop: 2 }}>
-                          <a href={`tel:${telJugador}`} style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <div className="player-phone">
+                          <a href={`tel:${telJugador}`} className="player-phone-link">
                             <Phone size={12} /> {telJugador}
                           </a>
                         </div>
@@ -4270,7 +4094,7 @@ export default function App() {
           <div>
             <div className="section-header">
               <h2 className="section-title"><Bell size={19} /> Club y Avisos</h2>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div className="section-header-actions">
                 {permisoNotifMovil !== 'granted' && (
                   <button type="button" className="btn-rsvp" onClick={solicitarPermisoNotificacionesMovil}>
                     <Bell size={14} /> Activar alertas móvil
@@ -4306,8 +4130,8 @@ export default function App() {
                   <form className="form-box" onSubmit={handleAddAviso}>
                     <input placeholder="Título del aviso *" required value={nuevoAviso.titulo} onChange={(e) => setNuevoAviso({ ...nuevoAviso, titulo: e.target.value })} />
                     <textarea rows="3" placeholder="Mensaje para jugadores y familias *" required value={nuevoAviso.mensaje} onChange={(e) => setNuevoAviso({ ...nuevoAviso, mensaje: e.target.value })} />
-                    <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input type="checkbox" style={{ width: 'auto' }} checked={nuevoAviso.urgente} onChange={(e) => setNuevoAviso({ ...nuevoAviso, urgente: e.target.checked })} />
+                    <label className="checkbox-inline">
+                      <input type="checkbox" className="checkbox-auto" checked={nuevoAviso.urgente} onChange={(e) => setNuevoAviso({ ...nuevoAviso, urgente: e.target.checked })} />
                       Marcar como Urgente
                     </label>
                     <button type="submit" className="btn-primary">Publicar Aviso</button>
@@ -4321,14 +4145,14 @@ export default function App() {
                       {estaEditando ? (
                         <form
                           onSubmit={(e) => handleGuardarEdicionAviso(e, a.id)}
-                          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+                          className="edit-aviso-form"
                         >
-                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                          <div className="edit-aviso-title">
                             Editar aviso
                           </div>
                           <input
                             placeholder="Título del aviso *"
-                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                            className="field-input"
                             value={formEdicionAviso.titulo}
                             onChange={(e) => setFormEdicionAviso({ ...formEdicionAviso, titulo: e.target.value })}
                             required
@@ -4336,21 +4160,21 @@ export default function App() {
                           <textarea
                             rows="3"
                             placeholder="Mensaje para jugadores y familias *"
-                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                            className="field-input"
                             value={formEdicionAviso.mensaje}
                             onChange={(e) => setFormEdicionAviso({ ...formEdicionAviso, mensaje: e.target.value })}
                             required
                           />
-                          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <label className="checkbox-inline">
                             <input
                               type="checkbox"
-                              style={{ width: 'auto' }}
+                              className="checkbox-auto"
                               checked={formEdicionAviso.urgente}
                               onChange={(e) => setFormEdicionAviso({ ...formEdicionAviso, urgente: e.target.checked })}
                             />
                             Marcar como Urgente
                           </label>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div className="edit-aviso-actions">
                             <button type="submit" className="btn-primary">
                               Guardar cambios
                             </button>
@@ -4365,12 +4189,12 @@ export default function App() {
                         </form>
                       ) : (
                         <>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <span className={`tag ${a.urgente ? 'urgent' : ''}`}>
+                          <div className="aviso-card-top">
+                            <span className={`tag ${a.urgente ? 'urgent' : ''}`}
                               {a.urgente ? 'Urgente' : 'Comunicado'}
                             </span>
                             {(puedePublicarAvisos || isAdmin) && (
-                              <div style={{ display: 'flex', gap: 6 }}>
+                              <div className="aviso-card-actions">
                                 {puedePublicarAvisos && (
                                   <button
                                     type="button"
@@ -4389,8 +4213,8 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{a.titulo}</h3>
-                          <p style={{ fontSize: 14, color: '#334155', lineHeight: 1.45 }}>{a.mensaje}</p>
+                          <h3 className="aviso-heading">{a.titulo}</h3>
+                          <p className="aviso-body">{a.mensaje}</p>
                         </>
                       )}
                     </div>
@@ -4402,25 +4226,21 @@ export default function App() {
             {avisosSubtab === 'pistas' && (
               <div>
                 <div className="card">
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                  <div className="info-card-title">
                     Redes Sociales del Club
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                  <div className="info-card-sub">
                     Sigue toda la actividad, fotos y resultados oficiales
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="social-links-stack">
                     {REDES_SOCIALES_CLUB.map((red) => (
                       <a
                         key={red.nombre}
                         href={red.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn-primary"
-                        style={{
-                          textDecoration: 'none',
-                          justifyContent: 'space-between',
-                          background: red.color
-                        }}
+                        className="btn-primary social-link-btn"
+                        style={{ backgroundColor: red.color }}
                       >
                         <span>
                           <TextoConSignoGenero texto={red.nombre} />
@@ -4433,14 +4253,13 @@ export default function App() {
 
                 {PABELLONES.map((pb) => (
                   <div key={pb.nombre} className="card">
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{pb.nombre}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{pb.zona}</div>
+                    <div className="info-card-title">{pb.nombre}</div>
+                    <div className="info-card-sub">{pb.zona}</div>
                     <a
                       href={pb.mapa}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-primary"
-                      style={{ textDecoration: 'none' }}
+                      className="btn-primary maps-link-btn"
                     >
                       <Navigation size={14} /> Abrir en Maps
                     </a>
@@ -4449,10 +4268,10 @@ export default function App() {
 
                 {ENTRENOS.map((en) => (
                   <div key={en.categoria} className="card">
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    <div className="training-cat">
                       <TextoConSignoGenero texto={en.categoria} />
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{en.dias}</div>
+                    <div className="training-days">{en.dias}</div>
                   </div>
                 ))}
               </div>
@@ -4487,15 +4306,15 @@ export default function App() {
                 />
 
                 {isAdmin && (
-                  <form className="card" onSubmit={handleCrearPerfilEspecialDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div className="section-title" style={{ fontSize: 15 }}>
+                  <form className="card admin-panel-form" onSubmit={handleCrearPerfilEspecialDirectiva}>
+                    <div className="section-title admin-panel-title">
                       <UserPlus size={17} /> Entrenador y 2º Entrenador ({perfilesEspecialesCreados.length}/{MAX_PERFILES_ESPECIALES_DIRECTIVA})
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    <p className="admin-panel-help">
                       No llevan dorsal; su rol y categoría es Entrenador o 2º Entrenador.
                     </p>
                     <select
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      className="field-input"
                       value={nuevoPerfilEspecial.rolEspecial}
                       onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, rolEspecial: e.target.value })}
                     >
@@ -4505,7 +4324,7 @@ export default function App() {
                     </select>
                     <input
                       placeholder="Nombre o seudónimo *"
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      className="field-input"
                       value={nuevoPerfilEspecial.nombre}
                       onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, nombre: e.target.value })}
                       required
@@ -4513,24 +4332,24 @@ export default function App() {
                     <input
                       type="password"
                       placeholder="Contraseña o PIN (mín. 4 caracteres) *"
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      className="field-input"
                       value={nuevoPerfilEspecial.pinUsuario}
                       onChange={(e) => setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, pinUsuario: e.target.value })}
                       required
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="special-avatar-row">
                       <AvatarCircular
                         src={nuevoPerfilEspecial.foto}
                         alt="Foto perfil especial"
                         letra={nuevoPerfilEspecial.nombre?.[0] || 'E'}
                         tamano={48}
                       />
-                      <label className="btn-rsvp" style={{ cursor: 'pointer' }}>
+                      <label className="btn-rsvp file-upload-label">
                         <Camera size={14} /> Foto (opcional)
                         <input
                           type="file"
                           accept="image/*"
-                          style={{ display: 'none' }}
+                          className="file-input-hidden"
                           onChange={(e) =>
                             procesarFotoCircular(e.target.files[0], (dataUrl) =>
                               setNuevoPerfilEspecial({ ...nuevoPerfilEspecial, foto: dataUrl })
@@ -4544,14 +4363,14 @@ export default function App() {
                 )}
 
                 {isAdmin && (
-                  <form className="card" onSubmit={handleCambiarPinDirectiva} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div className="section-title" style={{ fontSize: 15 }}>
+                  <form className="card admin-panel-form" onSubmit={handleCambiarPinDirectiva}>
+                    <div className="section-title admin-panel-title">
                       <KeyRound size={17} /> Cambiar PIN de Directiva
                     </div>
                     <input
                       type="password"
                       placeholder="PIN actual de directiva"
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      className="field-input"
                       value={pinDirActualInput}
                       onChange={(e) => setPinDirActualInput(e.target.value)}
                       required
@@ -4559,7 +4378,7 @@ export default function App() {
                     <input
                       type="password"
                       placeholder="Nuevo PIN de directiva (mín. 4 caracteres)"
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      className="field-input"
                       value={pinDirNuevoInput}
                       onChange={(e) => setPinDirNuevoInput(e.target.value)}
                       required
@@ -4567,13 +4386,13 @@ export default function App() {
                     <input
                       type="password"
                       placeholder="Confirmar nuevo PIN de directiva"
-                      style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                      className="field-input"
                       value={pinDirConfirmInput}
                       onChange={(e) => setPinDirConfirmInput(e.target.value)}
                       required
                     />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="submit" className="btn-primary" style={{ flex: 1 }}>Actualizar PIN Directiva</button>
+                    <div className="pin-form-actions">
+                      <button type="submit" className="btn-primary pin-submit-flex">Actualizar PIN Directiva</button>
                       <button type="button" className="btn-rsvp" onClick={handleRestablecerPinDirectiva}>Restablecer 1980</button>
                     </div>
                   </form>
@@ -4584,7 +4403,7 @@ export default function App() {
             {perfilSubtab === 'companeros' && (
               <div>
                 {totalPerfilesVisibles === 0 ? (
-                  <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  <div className="card empty-state-card">
                     Aún no hay perfiles completados en el club.
                   </div>
                 ) : (
@@ -4592,7 +4411,7 @@ export default function App() {
                     {directivasVisibles.map((item) => renderFilaPerfil(item))}
                     {entrenadoresVisibles.map((item) => renderFilaPerfil(item))}
 
-                    <div className="subtabs" style={{ marginTop: 14 }}>
+                    <div className="subtabs gender-subtabs">
                       <button
                         type="button"
                         className={`subtab ${generoPerfilesTab === 'masculina' ? 'active' : ''}`}
@@ -4610,7 +4429,7 @@ export default function App() {
                     </div>
 
                     {usuariosPorGeneroActual.length === 0 ? (
-                      <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                      <div className="card empty-state-card">
                         No hay usuarios en {generoPerfilesTab === 'femenina' ? 'plantilla femenina' : 'plantilla masculina'}.
                       </div>
                     ) : (
