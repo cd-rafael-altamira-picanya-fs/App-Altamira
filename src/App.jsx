@@ -20,7 +20,6 @@ import {
   Shield,
   MapPin,
   Clock,
-  Plus,
   Trash2,
   Trophy,
   Lock,
@@ -643,7 +642,7 @@ function parsearClasificacionDesdeTexto(textoCrudo, categoriaForzada = '') {
       let gc = 0;
       let dif = null;
 
-      if (nums.length >= 7) {
+      if (nums.length >= 8) {
         pts = nums[0];
         pj = nums[1];
         pg = nums[2];
@@ -651,7 +650,16 @@ function parsearClasificacionDesdeTexto(textoCrudo, categoriaForzada = '') {
         pp = nums[4];
         gf = nums[5];
         gc = nums[6];
-        dif = nums[7] !== undefined ? nums[7] : gf - gc;
+        dif = nums[7];
+      } else if (nums.length === 7) {
+        pts = nums[0];
+        pj = nums[1];
+        pg = nums[2];
+        pe = nums[3];
+        pp = nums[4];
+        gf = nums[5];
+        gc = nums[6];
+        dif = gf - gc;
       } else if (nums.length >= 4) {
         pj = nums[0] ?? 0;
         pts = nums[1] ?? 0;
@@ -800,21 +808,6 @@ function normalizarClaveClasificacion(item) {
 function obtenerMarcaTiempoPartido(partido) {
   const textoCompleto = `${partido?.fecha || ''} ${partido?.local || ''} ${partido?.visitante || ''}`.trim();
   if (!textoCompleto) return Number.MAX_SAFE_INTEGER;
-
-  const meses = {
-    ene: 0, enero: 0,
-    feb: 1, febrero: 1,
-    mar: 2, marzo: 2,
-    abr: 3, abril: 3,
-    may: 4, mayo: 4,
-    jun: 5, junio: 5,
-    jul: 6, julio: 6,
-    ago: 7, agosto: 7,
-    sep: 8, sept: 8, septiembre: 8,
-    oct: 9, octubre: 9,
-    nov: 10, noviembre: 10,
-    dic: 11, diciembre: 11
-  };
 
   const horaMatch = textoCompleto.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   const horas = horaMatch ? Number(horaMatch[1]) : 23;
@@ -2167,39 +2160,6 @@ export default function App() {
     alert(`PIN de directiva restablecido a ${PIN_DIRECTIVA_INICIAL}`);
   };
 
-  const [nuevoPartido, setNuevoPartido] = useState({
-    categoria: CATEGORIAS_VISIBLES_CLUB[0],
-    local: 'C.D. Rafael Altamira FS',
-    visitante: '',
-    fecha: '',
-    pabellon: 'Pabellón Municipal Picanya',
-    resultado: 'VS'
-  });
-
-  const [nuevoEquipoTabla, setNuevoEquipoTabla] = useState({
-    categoria: CATEGORIAS_VISIBLES_CLUB[0],
-    pos: '',
-    equipo: '',
-    pts: '0',
-    pj: '0',
-    pg: '0',
-    pe: '0',
-    pp: '0',
-    gf: '0',
-    gc: '0'
-  });
-
-  const [nuevoJugador, setNuevoJugador] = useState({
-    dorsal: '',
-    nombre: '',
-    posicion: 'Ala',
-    categoria: '',
-    telefono: '',
-    edad: '',
-    goles: '0',
-    foto: ''
-  });
-
   const [nuevoAviso, setNuevoAviso] = useState({
     titulo: '',
     mensaje: '',
@@ -2539,13 +2499,24 @@ export default function App() {
     if (nuevosConId.length === 0 && actualizadosFirestore.length === 0) return 0;
 
     let ordenada = [...listaTrabajo].sort((a, b) => {
-      const posA = Number(a.pos || 999);
-      const posB = Number(b.pos || 999);
-      if (posA !== posB) return posA - posB;
       if (Number(b.pts || 0) !== Number(a.pts || 0)) {
         return Number(b.pts || 0) - Number(a.pts || 0);
       }
-      return calcularDifClasificacion(b.gf, b.gc, b.dif) - calcularDifClasificacion(a.gf, a.gc, a.dif);
+      const difA = calcularDifClasificacion(a.gf, a.gc, a.dif);
+      const difB = calcularDifClasificacion(b.gf, b.gc, b.dif);
+      if (difB !== difA) return difB - difA;
+      return Number(b.gf || 0) - Number(a.gf || 0);
+    });
+
+    const contadoresPorCat = new Map();
+    ordenada = ordenada.map((fila) => {
+      const catKey = normalizarCategoria(fila.categoria || '');
+      const siguientePos = (contadoresPorCat.get(catKey) || 0) + 1;
+      contadoresPorCat.set(catKey, siguientePos);
+      return {
+        ...fila,
+        pos: fila.pos ? Number(fila.pos) : siguientePos
+      };
     });
 
     guardarClasificacionLocal(ordenada);
@@ -2618,30 +2589,6 @@ export default function App() {
     setTextoImportarClasificacion('');
     setShowImportTablaBox(false);
     alert(`¡Clasificación sincronizada (${procesados} fila(s)) en ${catDestino}!`);
-  };
-
-  const handleLimpiarTablaCompleta = async () => {
-    if (!isAdmin) return;
-    const catObjetivo = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
-    const msg = `¿Vaciar la tabla de clasificación de ${catObjetivo}?`;
-    if (!window.confirm(msg)) {
-      return;
-    }
-
-    const coincideCategoria = (item) =>
-      normalizarCategoria(item.categoria) === normalizarCategoria(catObjetivo);
-
-    const borrados = clasificacion.filter(coincideCategoria);
-    const restantes = clasificacion.filter((item) => !coincideCategoria(item));
-    guardarClasificacionLocal(restantes);
-
-    if (firebaseOk) {
-      await Promise.allSettled(
-        borrados
-          .filter((item) => !/^c_?[a-z]*_?\d+$/i.test(item.id))
-          .map((item) => deleteDoc(doc(db, 'clasificacion', item.id)))
-      );
-    }
   };
 
   const handleSubirEscudoEquipo = async (equipoItem, file) => {
@@ -2748,7 +2695,12 @@ export default function App() {
                     categoria: item?.categoria || catActual
                   }))
                 : [];
-              clasifDetectada = Array.isArray(data.clasificacion) ? data.clasificacion : [];
+              clasifDetectada = Array.isArray(data.clasificacion)
+                ? data.clasificacion.map((item) => ({
+                    ...item,
+                    categoria: item?.categoria || catActual
+                  }))
+                : [];
               if (Array.isArray(data.errores) && data.errores.length > 0) {
                 motivosError = data.errores.map((e) => e.motivo).filter(Boolean);
               }
@@ -2770,6 +2722,15 @@ export default function App() {
                 : parsearPartidosDesdeTexto(cuerpo, catFuente);
               if (extraidos.length > 0) {
                 partidosDetectados = [...partidosDetectados, ...extraidos];
+              }
+              const extraidaClasif = parsearClasificacionDesdeTexto(
+                cuerpo.trim().startsWith('<') && typeof DOMParser !== 'undefined'
+                  ? new DOMParser().parseFromString(cuerpo, 'text/html').body?.innerText || ''
+                  : cuerpo,
+                catFuente
+              );
+              if (extraidaClasif.length > 0) {
+                clasifDetectada = [...clasifDetectada, ...extraidaClasif];
               }
             } catch {
               // Bloqueo CORS o carga dinámica en cliente
@@ -2808,19 +2769,21 @@ export default function App() {
 
       const { eliminadosFechas, eliminadosDuplicados } = await sanearPartidosInterno(listaResultante);
 
+      let clasifActualizadaCount = 0;
       if (clasifDetectada.length > 0) {
-        await registrarClasificacionSinDuplicar(clasifDetectada, catActual);
+        clasifActualizadaCount = await registrarClasificacionSinDuplicar(clasifDetectada, catActual);
       }
 
       if (mostrarAvisoResultado) {
         const partesResumen = [];
-        if (añadidos > 0) partesResumen.push(`${añadidos} nuevo(s)`);
-        if (actualizados > 0) partesResumen.push(`${actualizados} actualizado(s)`);
+        if (añadidos > 0) partesResumen.push(`${añadidos} partido(s) nuevo(s)`);
+        if (actualizados > 0) partesResumen.push(`${actualizados} partido(s) actualizado(s)`);
+        if (clasifActualizadaCount > 0) partesResumen.push(`${clasifActualizadaCount} fila(s) de clasificación`);
         if (eliminadosDuplicados > 0) partesResumen.push(`${eliminadosDuplicados} duplicado(s) limpio(s)`);
         if (eliminadosFechas > 0) partesResumen.push(`${eliminadosFechas} sin rival/fecha limpio(s)`);
 
         const avisoBloqueos =
-          motivosError.length > 0 && añadidos === 0 && actualizados === 0
+          motivosError.length > 0 && añadidos === 0 && actualizados === 0 && clasifActualizadaCount === 0
             ? `\nNota: la web ha devuelto aviso (${motivosError.join(', ')}).`
             : '';
 
@@ -2839,133 +2802,84 @@ export default function App() {
     }
   };
 
-  const handleAddPartido = async (e) => {
-    e.preventDefault();
-    if (!nuevoPartido.visitante) return;
-    const catSeleccionada = categoriaActiva || nuevoPartido.categoria || CATEGORIAS_VISIBLES_CLUB[0];
-    const item = {
-      ...nuevoPartido,
-      categoria: catSeleccionada,
-      resultado: normalizarMarcadorPartido(nuevoPartido.resultado),
-      asistentes: [],
-      createdAt: serverTimestamp()
-    };
-    const idTemporal = `part_${Date.now()}`;
-    const actualizada = [{ id: idTemporal, ...item }, ...partidos];
-    guardarPartidosLocal(actualizada);
-    setShowForm(false);
-    setNuevoPartido({
-      categoria: catSeleccionada,
-      local: 'C.D. Rafael Altamira FS',
-      visitante: '',
-      fecha: '',
-      pabellon: 'Pabellón Municipal Picanya',
-      resultado: 'VS'
-    });
-    if (firebaseOk) {
-      try {
-        const ref = await addDoc(collection(db, 'partidos'), item);
-        guardarPartidosLocal(actualizada.map((p) => (p.id === idTemporal ? { ...p, id: ref.id } : p)));
-      } catch {
-        // Mantiene respaldo local
+  const handleActualizarClasificacion = async () => {
+    const catDestino = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
+    if (textoImportarClasificacion.trim()) {
+      const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion, catDestino);
+      if (parseados.length === 0) {
+        alert('No se detectaron filas de clasificación válidas en el texto pegado.');
+        return;
       }
+      const procesados = await registrarClasificacionSinDuplicar(parseados, catDestino);
+      setTextoImportarClasificacion('');
+      setShowImportTablaBox(false);
+      alert(
+        procesados > 0
+          ? `¡Clasificación actualizada (${procesados} equipo(s)) en ${catDestino}!`
+          : `Clasificación al día en ${catDestino}.`
+      );
+      return;
     }
-  };
 
-  const handleAddEquipoTabla = async (e) => {
-    e.preventDefault();
-    if (!nuevoEquipoTabla.equipo) return;
-    const gf = Number(nuevoEquipoTabla.gf || 0);
-    const gc = Number(nuevoEquipoTabla.gc || 0);
-    const catTabla = categoriaActiva || nuevoEquipoTabla.categoria || CATEGORIAS_VISIBLES_CLUB[0];
-    const item = {
-      categoria: catTabla,
-      pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
-      equipo: sanearNombreEquipoTabla([nuevoEquipoTabla.equipo]),
-      pts: Number(nuevoEquipoTabla.pts || 0),
-      pj: Number(nuevoEquipoTabla.pj || 0),
-      pg: Number(nuevoEquipoTabla.pg || 0),
-      pe: Number(nuevoEquipoTabla.pe || 0),
-      pp: Number(nuevoEquipoTabla.pp || 0),
-      gf,
-      gc,
-      dif: calcularDifClasificacion(gf, gc),
-      escudo: ''
-    };
-    const idTemporal = `eq_${Date.now()}`;
-    const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => Number(a.pos || 999) - Number(b.pos || 999));
-    guardarClasificacionLocal(actualizada);
-    setShowForm(false);
-    setNuevoEquipoTabla({ categoria: catTabla, pos: '', equipo: '', pts: '0', pj: '0', pg: '0', pe: '0', pp: '0', gf: '0', gc: '0' });
-    if (firebaseOk) {
-      try {
-        const ref = await addDoc(collection(db, 'clasificacion'), item);
-        guardarClasificacionLocal(actualizada.map((c) => (c.id === idTemporal ? { ...c, id: ref.id } : c)));
-      } catch {
-        // Mantiene respaldo local
+    if (showImportTablaBox) {
+      setShowImportTablaBox(false);
+      return;
+    }
+
+    setSincronizandoUrls(true);
+    try {
+      const { partidosCargados } = await cargarDatosUnaVez(true, false);
+      const basePartidos =
+        Array.isArray(partidosCargados) && partidosCargados.length > 0
+          ? partidosCargados
+          : partidos.length > 0
+          ? partidos
+          : DEMO_PARTIDOS;
+
+      const fuenteActiva = fuentesSincronizacion.find(
+        (f) => normalizarCategoria(f.categoria) === normalizarCategoria(catDestino)
+      );
+
+      let clasifDetectada = [];
+      if (fuenteActiva) {
+        try {
+          const resp = await fetch('/api/sincronizar-partidos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              categoriaActiva: catDestino,
+              urls: [fuenteActiva.url],
+              fuentes: [fuenteActiva]
+            })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.ok && Array.isArray(data.clasificacion)) {
+              clasifDetectada = data.clasificacion.map((item) => ({
+                ...item,
+                categoria: item?.categoria || catDestino
+              }));
+            }
+          }
+        } catch {
+          // Si no responde el endpoint, abrimos el cuadro de pegar clasificación
+        }
       }
-    }
-  };
 
-  const handleAddJugador = async (e) => {
-    e.preventDefault();
-    const dorsalLimpio = String(nuevoJugador.dorsal || '').trim();
-    const nombreLimpio = String(nuevoJugador.nombre || '').trim();
-    const categoriaLimpia = String(nuevoJugador.categoria || '').trim();
-    const telefonoLimpio = limpiarTelefono(nuevoJugador.telefono);
-    const edadLimpia = normalizarEdad(nuevoJugador.edad);
-
-    if (!dorsalLimpio) {
-      alert('El campo Dorsal / Número * es obligatorio.');
-      return;
-    }
-    if (!nombreLimpio) {
-      alert('El campo Nombre del jugador * es obligatorio.');
-      return;
-    }
-    if (!categoriaLimpia) {
-      alert('El campo Categoría * es obligatorio.');
-      return;
-    }
-    if (telefonoLimpio.length < 6) {
-      alert('El campo Teléfono * es obligatorio para la ficha del club.');
-      return;
-    }
-    if (!edadLimpia) {
-      alert('El campo Edad * es obligatorio (entre 1 y 99 años).');
-      return;
-    }
-    if (existeDorsalEnCategoria(dorsalLimpio, categoriaLimpia)) {
-      alert(`ERROR: Ya existe un jugador con el dorsal #${dorsalLimpio} en ${categoriaLimpia}. No puede haber dos dorsales iguales en la misma categoría.`);
-      return;
-    }
-
-    const item = {
-      ...nuevoJugador,
-      dorsal: dorsalLimpio,
-      nombre: nombreLimpio,
-      posicion: puedeGestionarAlaYGoles ? (nuevoJugador.posicion || 'Ala') : 'Sin asignar',
-      categoria: categoriaLimpia,
-      telefono: telefonoLimpio,
-      edad: edadLimpia,
-      goles: puedeGestionarAlaYGoles ? Math.max(0, Number(nuevoJugador.goles || 0)) : 0,
-      foto: nuevoJugador.foto || '',
-      createdAt: serverTimestamp()
-    };
-    const idTemporal = `jug_${Date.now()}`;
-    const actualizada = [...plantilla, { id: idTemporal, ...item }];
-    guardarPlantillaLocal(actualizada);
-    setShowForm(false);
-    setNuevoJugador({ dorsal: '', nombre: '', posicion: 'Ala', categoria: '', telefono: '', edad: '', goles: '0', foto: '' });
-
-    if (firebaseOk) {
-      try {
-        const ref = await addDoc(collection(db, 'plantilla'), item);
-        const conIdReal = actualizada.map((j) => (j.id === idTemporal ? { ...j, id: ref.id } : j));
-        guardarPlantillaLocal(conIdReal);
-      } catch {
-        // Mantiene respaldo local
+      if (clasifDetectada.length > 0) {
+        const procesados = await registrarClasificacionSinDuplicar(clasifDetectada, catDestino);
+        const partidosCat = basePartidos.filter(
+          (p) => normalizarCategoria(p.categoria) === normalizarCategoria(catDestino)
+        );
+        alert(
+          `Clasificación actualizada en ${catDestino}: ${procesados} fila(s) procesada(s) (${partidosCat.length} partido(s) en categoría).`
+        );
+      } else {
+        setShowImportTablaBox(true);
+        setShowForm(false);
       }
+    } finally {
+      setSincronizandoUrls(false);
     }
   };
 
@@ -3114,7 +3028,17 @@ export default function App() {
 
   const clasificacionFiltrada = useMemo(() => {
     const catNorm = normalizarCategoria(categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0]);
-    return clasificacion.filter((c) => normalizarCategoria(c.categoria) === catNorm);
+    return clasificacion
+      .filter((c) => normalizarCategoria(c.categoria) === catNorm)
+      .sort((a, b) => {
+        if (Number(b.pts || 0) !== Number(a.pts || 0)) {
+          return Number(b.pts || 0) - Number(a.pts || 0);
+        }
+        const difA = calcularDifClasificacion(a.gf, a.gc, a.dif);
+        const difB = calcularDifClasificacion(b.gf, b.gc, b.dif);
+        if (difB !== difA) return difB - difA;
+        return Number(b.gf || 0) - Number(a.gf || 0);
+      });
   }, [clasificacion, categoriaActiva]);
 
   const { proximos: partidosProximos, jugados: partidosJugados } = useMemo(
@@ -4016,27 +3940,16 @@ export default function App() {
           <div>
             <div className="section-header">
               <h2 className="section-title"><Calendar size={19} /> Partidos y Asistencia</h2>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn-rsvp"
-                  disabled={sincronizandoUrls || refrescandoDatos}
-                  onClick={() => sincronizarPartidosDesdeWebs(true)}
-                  title="Importar, actualizar y limpiar duplicados o fechas sin rival"
-                >
-                  <RefreshCw size={14} />
-                  {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
-                </button>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => setShowForm(!showForm)}
-                  >
-                    <Plus size={15} /> Partido
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                className="btn-rsvp"
+                disabled={sincronizandoUrls || refrescandoDatos}
+                onClick={() => sincronizarPartidosDesdeWebs(true)}
+                title="Actualizar partidos y clasificación de la categoría activa"
+              >
+                <RefreshCw size={14} />
+                {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
+              </button>
             </div>
 
             {renderSelectorCategorias()}
@@ -4057,21 +3970,6 @@ export default function App() {
                 Jugados ({partidosJugados.length})
               </button>
             </div>
-
-            {isAdmin && showForm && (
-              <form className="form-box" onSubmit={handleAddPartido}>
-                <SelectorCategoriaYGenero
-                  valorActual={categoriaActiva || nuevoPartido.categoria}
-                  onChangeValor={(val) => setNuevoPartido({ ...nuevoPartido, categoria: val })}
-                />
-                <input placeholder="Local" value={nuevoPartido.local} onChange={(e) => setNuevoPartido({ ...nuevoPartido, local: e.target.value })} />
-                <input placeholder="Visitante *" required value={nuevoPartido.visitante} onChange={(e) => setNuevoPartido({ ...nuevoPartido, visitante: e.target.value })} />
-                <input placeholder="Día y Hora (Sábado 18:30)" value={nuevoPartido.fecha} onChange={(e) => setNuevoPartido({ ...nuevoPartido, fecha: e.target.value })} />
-                <input placeholder="Pabellón" value={nuevoPartido.pabellon} onChange={(e) => setNuevoPartido({ ...nuevoPartido, pabellon: e.target.value })} />
-                <input placeholder="Resultado (o VS)" value={nuevoPartido.resultado} onChange={(e) => setNuevoPartido({ ...nuevoPartido, resultado: e.target.value })} />
-                <button type="submit" className="btn-primary">Guardar Partido</button>
-              </form>
-            )}
 
             {partidosSubtab === 'proximos' && (
               <div>
@@ -4103,36 +4001,17 @@ export default function App() {
           <div>
             <div className="section-header">
               <h2 className="section-title"><Trophy size={19} /> Clasificación y Goles</h2>
-              {isAdmin && ligaSubtab === 'tabla' && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn-rsvp"
-                    onClick={handleLimpiarTablaCompleta}
-                  >
-                    <Trash2 size={14} /> Limpiar tabla
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-rsvp"
-                    onClick={() => {
-                      setShowImportTablaBox(!showImportTablaBox);
-                      setShowForm(false);
-                    }}
-                  >
-                    Importar tabla
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => {
-                      setShowForm(!showForm);
-                      setShowImportTablaBox(false);
-                    }}
-                  >
-                    <Plus size={15} /> Equipo
-                  </button>
-                </div>
+              {ligaSubtab === 'tabla' && (
+                <button
+                  type="button"
+                  className="btn-rsvp"
+                  disabled={sincronizandoUrls || refrescandoDatos}
+                  onClick={handleActualizarClasificacion}
+                  title="Actualizar clasificación de la categoría activa"
+                >
+                  <RefreshCw size={14} />
+                  {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
+                </button>
               )}
             </div>
 
@@ -4149,13 +4028,13 @@ export default function App() {
 
             {ligaSubtab === 'tabla' && (
               <>
-                {isAdmin && showImportTablaBox && (
+                {showImportTablaBox && (
                   <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
-                      Importar clasificación ({categoriaActiva})
+                      Actualizar clasificación ({categoriaActiva})
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                      Pega aquí las filas con columnas (# Equipo Pts PJ PG PE PP GF GC Dif) o el texto de clasificación:
+                      Pega aquí las filas de la clasificación (# Equipo Pts PJ PG PE PP GF GC Dif) y pulsa Actualizar:
                     </p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button
@@ -4174,22 +4053,8 @@ export default function App() {
                       required
                     />
                     <button type="submit" className="btn-primary">
-                      Añadir clasificación sin duplicados
+                      Actualizar clasificación
                     </button>
-                  </form>
-                )}
-
-                {isAdmin && showForm && (
-                  <form className="form-box" onSubmit={handleAddEquipoTabla}>
-                    <input placeholder="Nombre del equipo *" required value={nuevoEquipoTabla.equipo} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, equipo: e.target.value })} />
-                    <input type="number" placeholder="Puntos (Pts)" value={nuevoEquipoTabla.pts} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pts: e.target.value })} />
-                    <input type="number" placeholder="Partidos Jugados (PJ)" value={nuevoEquipoTabla.pj} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pj: e.target.value })} />
-                    <input type="number" placeholder="Ganados (PG)" value={nuevoEquipoTabla.pg} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pg: e.target.value })} />
-                    <input type="number" placeholder="Empatados (PE)" value={nuevoEquipoTabla.pe} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pe: e.target.value })} />
-                    <input type="number" placeholder="Perdidos (PP)" value={nuevoEquipoTabla.pp} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, pp: e.target.value })} />
-                    <input type="number" placeholder="Goles a Favor (GF)" value={nuevoEquipoTabla.gf} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gf: e.target.value })} />
-                    <input type="number" placeholder="Goles en Contra (GC)" value={nuevoEquipoTabla.gc} onChange={(e) => setNuevoEquipoTabla({ ...nuevoEquipoTabla, gc: e.target.value })} />
-                    <button type="submit" className="btn-primary">Añadir a la tabla</button>
                   </form>
                 )}
 
@@ -4359,75 +4224,7 @@ export default function App() {
           <div>
             <div className="section-header">
               <h2 className="section-title"><Shield size={19} /> Equipos y Plantilla</h2>
-              {isAdmin && (
-                <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-                  <Plus size={15} /> Jugador
-                </button>
-              )}
             </div>
-
-            {isAdmin && showForm && (
-              <form className="form-box" onSubmit={handleAddJugador}>
-                <input
-                  placeholder="Dorsal / Número (ej. 10) *"
-                  required
-                  value={nuevoJugador.dorsal}
-                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, dorsal: e.target.value })}
-                />
-                <input
-                  placeholder="Nombre del jugador *"
-                  required
-                  value={nuevoJugador.nombre}
-                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, nombre: e.target.value })}
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="99"
-                  placeholder="Edad del jugador (ej. 16) *"
-                  required
-                  value={nuevoJugador.edad}
-                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, edad: e.target.value })}
-                />
-                <input
-                  type="tel"
-                  placeholder="Teléfono del jugador (ficha del club) *"
-                  required
-                  value={nuevoJugador.telefono}
-                  onChange={(e) => setNuevoJugador({ ...nuevoJugador, telefono: e.target.value })}
-                />
-                {puedeGestionarAlaYGoles && (
-                  <select value={nuevoJugador.posicion} onChange={(e) => setNuevoJugador({ ...nuevoJugador, posicion: e.target.value })}>
-                    <option value="Portero">Portero</option>
-                    <option value="Cierre">Cierre</option>
-                    <option value="Ala">Ala</option>
-                    <option value="Pívot">Pívot</option>
-                    <option value="Entrenador">Entrenador</option>
-                  </select>
-                )}
-                <SelectorCategoriaYGenero
-                  valorActual={nuevoJugador.categoria}
-                  onChangeValor={(val) => setNuevoJugador({ ...nuevoJugador, categoria: val })}
-                />
-                {puedeGestionarAlaYGoles && (
-                  <input
-                    type="number"
-                    placeholder="Goles iniciales"
-                    value={nuevoJugador.goles}
-                    onChange={(e) => setNuevoJugador({ ...nuevoJugador, goles: e.target.value })}
-                  />
-                )}
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
-                  Foto del jugador (opcional):
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => procesarFotoCircular(e.target.files[0], (dataUrl) => setNuevoJugador({ ...nuevoJugador, foto: dataUrl }))}
-                  />
-                </label>
-                <button type="submit" className="btn-primary">Guardar Jugador</button>
-              </form>
-            )}
 
             {plantilla.map((j) => {
               const telJugador = limpiarTelefono(j.telefono || '');
@@ -4481,13 +4278,14 @@ export default function App() {
                 )}
                 {puedePublicarAvisos && avisosSubtab === 'avisos' && (
                   <button
+                    type="button"
                     className="btn-primary"
                     onClick={() => {
                       setShowForm(!showForm);
                       setEditandoAvisoId(null);
                     }}
                   >
-                    <Plus size={15} /> Aviso
+                    + Aviso
                   </button>
                 )}
               </div>
