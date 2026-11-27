@@ -86,9 +86,10 @@ export default async function handler(req, res) {
         try {
           const resp = await fetch(objetivo, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'es-ES,es;q=0.9'
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+              'Referer': 'https://futbuteo.com/'
             }
           });
           if (resp.ok) {
@@ -113,7 +114,7 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      ok: true,
+      ok: clasificacion.length > 0 || errores.length === 0,
       partidos,
       clasificacion,
       errores
