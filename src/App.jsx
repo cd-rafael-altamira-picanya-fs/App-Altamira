@@ -1332,6 +1332,7 @@ export default function App() {
   };
 
   const [partidosSubtab, setPartidosSubtab] = useState('proximos');
+  const [partidoSeleccionadoId, setPartidoSeleccionadoId] = useState(null);
   const [ligaSubtab, setLigaSubtab] = useState('tabla');
   const [avisosSubtab, setAvisosSubtab] = useState('avisos');
   const [perfilSubtab, setPerfilSubtab] = useState('mi-perfil');
@@ -2087,6 +2088,7 @@ export default function App() {
     setShowImportBox(false);
     setShowImportTablaBox(false);
     setEditandoAvisoId(null);
+    setPartidoSeleccionadoId(null);
     setForzarOnboarding(false);
     setModoRegistroJugador(false);
     setIdentificadorLoginInput('');
@@ -2955,6 +2957,7 @@ export default function App() {
       handleCancelarEdicionAviso();
     }
     if (col === 'partidos') {
+      if (partidoSeleccionadoId === id) setPartidoSeleccionadoId(null);
       guardarPartidosLocal(partidos.filter((x) => x.id !== id));
     } else if (col === 'clasificacion') {
       guardarClasificacionLocal(clasificacion.filter((x) => x.id !== id));
@@ -2984,6 +2987,11 @@ export default function App() {
   const { proximos: partidosProximos, jugados: partidosJugados } = useMemo(
     () => separarPartidosProximosYJugados(partidos),
     [partidos]
+  );
+
+  const partidoModal = useMemo(
+    () => partidos.find((p) => p.id === partidoSeleccionadoId) || null,
+    [partidos, partidoSeleccionadoId]
   );
 
   const goleadoresOrdenados = useMemo(
@@ -3064,7 +3072,7 @@ export default function App() {
       ? usuariosFemeninosOrdenados
       : usuariosMasculinosOrdenados;
 
-  const renderTarjetaPartido = (p, yaJugado = false) => {
+  const obtenerDatosFormateadosPartido = (p, yaJugado = false) => {
     const asistentes = p.asistentes || [];
     const voy = asistentes.includes(perfil.nombre);
     const marcadorVisible = normalizarMarcadorPartido(p.resultado || 'VS');
@@ -3096,74 +3104,274 @@ export default function App() {
     );
 
     const urlMaps = obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTarjeta);
+    return {
+      asistentes,
+      voy,
+      marcadorVisible,
+      esMarcadorJugado,
+      fechaRescatada,
+      localTexto,
+      visitanteTexto,
+      pabellonTexto,
+      urlMaps
+    };
+  };
+
+  const renderTarjetaPartidoCompacta = (p, yaJugado = false) => {
+    const {
+      asistentes,
+      voy,
+      marcadorVisible,
+      esMarcadorJugado,
+      fechaRescatada,
+      localTexto,
+      visitanteTexto
+    } = obtenerDatosFormateadosPartido(p, yaJugado);
 
     return (
       <div
         key={p.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => setPartidoSeleccionadoId(p.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setPartidoSeleccionadoId(p.id);
+          }
+        }}
         className="card"
-        style={esMarcadorJugado ? { borderLeft: '4px solid var(--primary)' } : undefined}
+        style={{
+          padding: '10px 12px',
+          marginBottom: 8,
+          cursor: 'pointer',
+          borderLeft: esMarcadorJugado ? '4px solid var(--primary)' : '4px solid #3b82f6'
+        }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span className={`tag ${esMarcadorJugado ? 'result' : ''}`}>
+            <span className={`tag ${esMarcadorJugado ? 'result' : ''}`} style={{ fontSize: 11, padding: '2px 7px' }}>
               <TextoConSignoGenero texto={p.categoria} />
             </span>
             <span
               className="tag"
-              style={
-                esMarcadorJugado
+              style={{
+                fontSize: 11,
+                padding: '2px 7px',
+                ...(esMarcadorJugado
                   ? { background: '#dcfce7', color: '#166534' }
-                  : { background: '#eff6ff', color: '#1e3a8a' }
-              }
+                  : { background: '#eff6ff', color: '#1e3a8a' })
+              }}
             >
               {esMarcadorJugado ? 'Jugado' : 'Por jugar'}
             </span>
           </div>
-          {isAdmin && (
-            <button className="btn-danger" onClick={() => handleDelete('partidos', p.id)}>
-              <Trash2 size={14} />
-            </button>
-          )}
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>
+            Ver detalle ›
+          </span>
         </div>
-        <div className="match-teams">
-          <span style={{ flex: 1 }}>{localTexto}</span>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>
+            {localTexto}
+          </span>
           <span
             className="match-score"
-            style={
-              esMarcadorJugado
+            style={{
+              padding: '3px 8px',
+              fontSize: 12,
+              flexShrink: 0,
+              ...(esMarcadorJugado
                 ? { background: '#1e3a8a', color: '#ffffff' }
-                : undefined
-            }
+                : undefined)
+            }}
           >
             {marcadorVisible}
           </span>
-          <span style={{ flex: 1, textAlign: 'right' }}>{visitanteTexto}</span>
+          <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>
+            {visitanteTexto}
+          </span>
         </div>
-        <div className="match-meta">
-          <span><Clock size={13} /> {fechaRescatada}</span>
-          <a
-            href={urlMaps}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Abrir ubicación en Google Maps"
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 7,
+            paddingTop: 6,
+            borderTop: '1px solid #f1f5f9',
+            fontSize: 12,
+            color: 'var(--muted)'
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Clock size={12} /> {fechaRescatada}
+          </span>
+          <span style={{ fontWeight: 600, color: voy ? '#166534' : 'var(--muted)' }}>
+            {voy ? '✓ Voy' : `${asistentes.length} conv.`}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderModalPartido = () => {
+    if (!partidoModal) return null;
+    const {
+      asistentes,
+      voy,
+      marcadorVisible,
+      esMarcadorJugado,
+      fechaRescatada,
+      localTexto,
+      visitanteTexto,
+      pabellonTexto,
+      urlMaps
+    } = obtenerDatosFormateadosPartido(partidoModal, esPartidoYaJugado(partidoModal));
+
+    return (
+      <div
+        onClick={() => setPartidoSeleccionadoId(null)}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 999
+        }}
+      >
+        <div
+          className="card"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: 440,
+            padding: 18,
+            marginBottom: 0,
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span className={`tag ${esMarcadorJugado ? 'result' : ''}`}>
+                <TextoConSignoGenero texto={partidoModal.categoria} />
+              </span>
+              <span
+                className="tag"
+                style={
+                  esMarcadorJugado
+                    ? { background: '#dcfce7', color: '#166534' }
+                    : { background: '#eff6ff', color: '#1e3a8a' }
+                }
+              >
+                {esMarcadorJugado ? 'Partido jugado' : 'Próximo partido'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() => handleDelete('partidos', partidoModal.id)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setPartidoSeleccionadoId(null)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '5px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  color: '#0f172a'
+                }}
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+          </div>
+
+          <div
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              color: 'var(--primary)',
-              fontWeight: 700,
-              textDecoration: 'underline'
+              background: '#f8fafc',
+              borderRadius: 12,
+              padding: 14,
+              border: '1px solid var(--border)',
+              marginBottom: 14
             }}
           >
-            <MapPin size={13} /> {pabellonTexto}
-          </a>
-        </div>
-        <div className="rsvp-bar">
-          <span>Convocados: <strong>{asistentes.length}</strong></span>
-          <div className="rsvp-btns">
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', textAlign: 'center', marginBottom: 8 }}>
+              Equipos enfrentados
+            </div>
+            <div className="match-teams" style={{ margin: 0 }}>
+              <span style={{ flex: 1, fontSize: 15 }}>{localTexto}</span>
+              <span
+                className="match-score"
+                style={{
+                  fontSize: 15,
+                  padding: '6px 12px',
+                  ...(esMarcadorJugado
+                    ? { background: '#1e3a8a', color: '#ffffff' }
+                    : undefined)
+                }}
+              >
+                {marcadorVisible}
+              </span>
+              <span style={{ flex: 1, textAlign: 'right', fontSize: 15 }}>{visitanteTexto}</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+              <Clock size={16} color="#1e3a8a" />
+              <span><strong>Fecha y hora:</strong> {fechaRescatada}</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, fontSize: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <MapPin size={16} color="#1e3a8a" style={{ marginTop: 2, flexShrink: 0 }} />
+                <span><strong>Dónde se juega:</strong> {pabellonTexto}</span>
+              </div>
+            </div>
+
+            <a
+              href={urlMaps}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary"
+              style={{ textDecoration: 'none', justifyContent: 'center' }}
+            >
+              <Navigation size={14} /> Abrir ubicación en Google Maps
+            </a>
+          </div>
+
+          <div
+            style={{
+              paddingTop: 12,
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap'
+            }}
+          >
+            <span style={{ fontSize: 13 }}>
+              Convocados: <strong>{asistentes.length}</strong>
+            </span>
             <button
+              type="button"
               className={`btn-rsvp ${voy ? 'yes' : ''}`}
-              onClick={() => toggleAsistencia(p)}
+              onClick={() => toggleAsistencia(partidoModal)}
             >
               {voy ? '✓ Voy al partido' : 'Confirmar asistencia'}
             </button>
@@ -3832,7 +4040,7 @@ export default function App() {
                     No hay partidos por jugar programados por ahora.
                   </div>
                 ) : (
-                  partidosProximos.map((p) => renderTarjetaPartido(p, false))
+                  partidosProximos.map((p) => renderTarjetaPartidoCompacta(p, false))
                 )}
               </div>
             )}
@@ -3844,7 +4052,7 @@ export default function App() {
                     Aún no hay partidos jugados registrados.
                   </div>
                 ) : (
-                  partidosJugados.map((p) => renderTarjetaPartido(p, true))
+                  partidosJugados.map((p) => renderTarjetaPartidoCompacta(p, true))
                 )}
               </div>
             )}
@@ -4579,6 +4787,8 @@ export default function App() {
           {firebaseOk ? '● Sincronizado con Firebase' : '○ Modo local activo'} · Creado por {NOMBRE_CREADOR_APP}
         </div>
       </main>
+
+      {renderModalPartido()}
 
       <nav className="bottom-nav">
         <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
