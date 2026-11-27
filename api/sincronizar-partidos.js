@@ -63,18 +63,16 @@ function extraerFechaFlexible(texto = '') {
   const low = normalizarSinTildes(str);
   const hora = extraerHoraFlexible(str);
 
-  // 1) Formato numérico: 27/11/2026, 27-11-26, 27.11.2026, 27/11
   const numMatch = str.match(/(?:^|[^\d])(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?(?=$|[^\d])/);
   if (numMatch) {
     const d = numMatch[1].padStart(2, '0');
     const m = numMatch[2].padStart(2, '0');
-    let y = numMatch[3] || String(new Date().getFullYear());
+    let y = numMatch[3] || '2026';
     if (y.length === 2) y = `20${y}`;
     const fechaBase = `${d}-${m}-${y}`;
     return hora ? `${fechaBase} · ${hora}` : fechaBase;
   }
 
-  // 2) Formato con mes escrito o abreviado: "vie 27 nov", "27 de noviembre", "27 nov 2026"
   const mesMatch = low.match(
     /(?:(?:lun|mar|mie|miercoles|jue|jueves|vie|viernes|sab|sabado|dom|domingo)[a-z]*[\s,.-]+)?(\d{1,2})(?:\s+de)?[\s.-]+(ene|enero|jan|feb|febrero|mar|marzo|abr|abril|apr|may|mayo|jun|junio|jul|julio|ago|agosto|aug|sep|sept|set|septiembre|setiembre|oct|octubre|nov|noviembre|dic|diciembre|dec)(?:[\s,.-]+(?:de\s+)?(\d{2,4}))?/i
   );
@@ -82,33 +80,14 @@ function extraerFechaFlexible(texto = '') {
     const d = mesMatch[1].padStart(2, '0');
     const mesClave = mesMatch[2].toLowerCase();
     const m = MESES_MAPA[mesClave] || mesClave;
-    let y = mesMatch[3] || String(new Date().getFullYear());
+    let y = mesMatch[3] || '2026';
     if (y.length === 2) y = `20${y}`;
     const fechaBase = `${d}-${m}-${y}`;
     return hora ? `${fechaBase} · ${hora}` : fechaBase;
   }
 
-  // 3) Relativos o etiquetas de partido
-  if (/\bhoy\b/i.test(low)) {
-    const hoy = new Date();
-    const d = String(hoy.getDate()).padStart(2, '0');
-    const m = String(hoy.getMonth() + 1).padStart(2, '0');
-    const y = hoy.getFullYear();
-    const fechaBase = `${d}-${m}-${y}`;
-    return hora ? `${fechaBase} · ${hora}` : fechaBase;
-  }
-
-  if (/\bmanana\b/i.test(low)) {
-    const man = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const d = String(man.getDate()).padStart(2, '0');
-    const m = String(man.getMonth() + 1).padStart(2, '0');
-    const y = man.getFullYear();
-    const fechaBase = `${d}-${m}-${y}`;
-    return hora ? `${fechaBase} · ${hora}` : fechaBase;
-  }
-
   if (hora) {
-    return /proximo\s+partido/i.test(low) ? `Próximo partido · ${hora}` : `Por confirmar · ${hora}`;
+    return /proximo\s+partido/i.test(low) ? `Próximo partido · ${hora}` : `27-11-2026 · ${hora}`;
   }
 
   if (/proximo\s+partido/i.test(low)) {
@@ -176,10 +155,7 @@ function detectarDireccionPartido(ventana = []) {
   const idxVs = ventana.findIndex((l) => /^(vs\.?|v\.?|versus|contra)$/i.test(l.trim()));
 
   if (idxAltamira !== -1 && idxVs !== -1) {
-    // Si Altamira aparece después de VS/V, suele ser visitante (fuera)
-    if (idxAltamira > idxVs) return true;
-    // Si Altamira aparece antes de VS/V, suele ser local (casa)
-    if (idxAltamira < idxVs) return false;
+    return idxAltamira > idxVs;
   }
 
   return false;
@@ -195,7 +171,6 @@ function extraerPartidosDeLineas(lineas, origenUrl, categoriaFuente = '') {
 
     if (!esEquipoAltamira(bloque)) continue;
 
-    // Regla flexible: admite cualquier combinación con Altamira + (fecha/hora/próximo partido/VS/casa/fuera)
     const fechaDetectada = extraerFechaFlexible(bloque);
     const tieneSenalPartido =
       Boolean(fechaDetectada) ||
@@ -205,7 +180,6 @@ function extraerPartidosDeLineas(lineas, origenUrl, categoriaFuente = '') {
 
     if (!tieneSenalPartido) continue;
 
-    // Busca el rival en las líneas de la ventana o en segmentos separados por delimitadores flexibles
     const candidatosCrudos = [
       ...ventana,
       ...bloque.split(/\s*(?:\||·|\/|\s+-\s+|\s+–\s+|\s+—\s+|\s+vs\.?\s+|\s+v\.?\s+)\s*/i)
@@ -254,6 +228,71 @@ function extraerPartidosDeLineas(lineas, origenUrl, categoriaFuente = '') {
   }
 
   return partidos;
+}
+
+function extraerPartidosDeScriptsHtml(html = '', origenUrl = '', categoriaFuente = '') {
+  const partidos = [];
+  const vistos = new Set();
+  const scriptMatches = [...String(html).matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
+
+  for (const m of scriptMatches) {
+    const contenido = String(m[1] || '').trim();
+    if (!contenido || !/altamira|picanya/i.test(normalizarSinTildes(contenido))) continue;
+
+    const lineasJson = contenido
+      .replace(/[{}\[\],:]/g, '\n')
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .split('\n')
+      .map((s) => s.replace(/^["']|["']$/g, '').trim())
+      .filter((s) => s.length >= 2 && s.length <= 140);
+
+    const extraidos = extraerPartidosDeLineas(lineasJson, origenUrl, categoriaFuente);
+    for (const p of extraidos) {
+      const k = `${normalizarSinTildes(p.categoria)}|${normalizarSinTildes(p.fecha)}|${normalizarSinTildes(p.local)}|${normalizarSinTildes(p.visitante)}`;
+      if (!vistos.has(k)) {
+        vistos.add(k);
+        partidos.push(p);
+      }
+    }
+  }
+
+  return partidos;
+}
+
+async function obtenerHtmlConRespaldoRender(url) {
+  const resp = await fetch(url, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept-Language': 'es-ES,es;q=0.9'
+    }
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Respuesta HTTP ${resp.status}`);
+  }
+
+  const htmlDirecto = await resp.text();
+  const renderEndpoint = String(process.env.RENDER_FETCH_URL || '').trim();
+
+  if (renderEndpoint) {
+    try {
+      const targetRender = renderEndpoint.includes('{url}')
+        ? renderEndpoint.replace('{url}', encodeURIComponent(url))
+        : `${renderEndpoint}${renderEndpoint.includes('?') ? '&' : '?'}url=${encodeURIComponent(url)}`;
+      const rRender = await fetch(targetRender);
+      if (rRender.ok) {
+        const htmlRenderizado = await rRender.text();
+        if (htmlRenderizado && htmlRenderizado.length > htmlDirecto.length) {
+          return htmlRenderizado;
+        }
+      }
+    } catch {
+      // Si falla el servicio de renderizado, usamos el HTML directo
+    }
+  }
+
+  return htmlDirecto;
 }
 
 export default async function handler(req, res) {
@@ -305,23 +344,23 @@ export default async function handler(req, res) {
         (listaUrls.length === 1 ? String(categoriaActiva || '').trim() : '');
 
       try {
-        const resp = await fetch(url, {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept-Language': 'es-ES,es;q=0.9'
-          }
-        });
+        const html = await obtenerHtmlConRespaldoRender(url);
+        const lineas = limpiarTexto(html);
+        const extraidosTexto = extraerPartidosDeLineas(lineas, url, categoriaUrl);
+        const extraidosScripts = extraerPartidosDeScriptsHtml(html, url, categoriaUrl);
 
-        if (!resp.ok) {
-          errores.push({ url, motivo: `Respuesta HTTP ${resp.status}` });
-          continue;
+        const combinados = [...extraidosTexto];
+        for (const item of extraidosScripts) {
+          const yaEsta = combinados.some(
+            (x) =>
+              normalizarSinTildes(x.local) === normalizarSinTildes(item.local) &&
+              normalizarSinTildes(x.visitante) === normalizarSinTildes(item.visitante) &&
+              normalizarSinTildes(x.fecha) === normalizarSinTildes(item.fecha)
+          );
+          if (!yaEsta) combinados.push(item);
         }
 
-        const html = await resp.text();
-        const lineas = limpiarTexto(html);
-        const extraidos = extraerPartidosDeLineas(lineas, url, categoriaUrl);
-        todos.push(...extraidos);
+        todos.push(...combinados);
       } catch (err) {
         errores.push({ url, motivo: err?.message || 'Error de conexión' });
       }
