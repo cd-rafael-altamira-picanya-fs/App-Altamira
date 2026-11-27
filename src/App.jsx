@@ -69,7 +69,6 @@ const REDES_SOCIALES_CLUB = [
 ];
 
 const CATEGORIAS_BASE = [
-  'Senior',
   'Juvenil',
   'Cadete',
   'Infantil',
@@ -80,6 +79,14 @@ const CATEGORIAS_BASE = [
 
 const CATEGORIAS_CLUB = [
   ...CATEGORIAS_BASE.flatMap((cat) => [`${cat} ♂`, `${cat} ♀`]),
+  'Copa Valenta ♀',
+  'Promoción Valenta ♀'
+];
+
+const CATEGORIAS_VISIBLES_CLUB = [
+  'Benjamín ♂',
+  'Juvenil ♂',
+  'Alevín ♂',
   'Copa Valenta ♀',
   'Promoción Valenta ♀'
 ];
@@ -213,7 +220,8 @@ function esRivalValido(rival) {
 
 function detectarCategoriaImportada(texto, categoriaForzada = '') {
   if (categoriaForzada && String(categoriaForzada).trim()) {
-    return String(categoriaForzada).trim();
+    const forz = String(categoriaForzada).trim();
+    if (!/^senior\b/i.test(forz)) return forz;
   }
 
   const raw = String(texto || '');
@@ -222,32 +230,53 @@ function detectarCategoriaImportada(texto, categoriaForzada = '') {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
-  const esFemenino =
-    tLimpio.includes('valenta') ||
-    tLimpio.includes('femenin') ||
-    raw.includes('♀');
-  const signo = esFemenino ? '♀' : '♂';
-
   const baseEncontrada = CATEGORIAS_BASE.find((cat) => {
     const limpio = cat
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
-    return tLimpio.includes(limpio);
+    return new RegExp(`\\b${limpio}\\b`).test(tLimpio);
   });
 
   if (baseEncontrada) {
+    const signo =
+      tLimpio.includes('valenta') || tLimpio.includes('femenin') || raw.includes('♀')
+        ? '♀'
+        : '♂';
     return `${baseEncontrada} ${signo}`;
   }
 
-  if (esFemenino) {
-    if (tLimpio.includes('nostra copa') || tLimpio.includes('copa')) {
-      return 'Copa Valenta ♀';
-    }
-    if (tLimpio.includes('promocion') || tLimpio.includes('liga')) {
-      return 'Promoción Valenta ♀';
-    }
+  if (tLimpio.includes('nostra copa') || tLimpio.includes('navarti')) {
+    return 'Copa Valenta ♀';
+  }
+
+  if (
+    tLimpio.includes('promocion') ||
+    tLimpio.includes('valenta') ||
+    tLimpio.includes('maristas cullera') ||
+    tLimpio.includes('inter marjal') ||
+    tLimpio.includes("l'olleria") ||
+    tLimpio.includes('maguen alfafar')
+  ) {
     return 'Promoción Valenta ♀';
+  }
+
+  if (
+    tLimpio.includes('alzira') ||
+    tLimpio.includes('font de la figuera') ||
+    tLimpio.includes('corbera') ||
+    tLimpio.includes('senabre') ||
+    tLimpio.includes('picassent') ||
+    tLimpio.includes('futsacar') ||
+    tLimpio.includes('inter montesa') ||
+    tLimpio.includes('alameda') ||
+    tLimpio.includes('alaquas') ||
+    tLimpio.includes('hispanic fuensanta') ||
+    tLimpio.includes('sueca') ||
+    tLimpio.includes('massanassa') ||
+    tLimpio.includes('inmaculada corazon')
+  ) {
+    return 'Juvenil ♂';
   }
 
   return 'Juvenil ♂';
@@ -765,8 +794,7 @@ function normalizarFechaClave(fechaStr) {
     .trim();
 }
 
-function normalizarClavePartido(partido) {
-  const cat = normalizarCategoria(partido?.categoria || '');
+function normalizarClavePartidoSinCategoria(partido) {
   const fecha = normalizarFechaClave(partido?.fecha);
   const equiposOrdenados = [
     normalizarEquipoClave(partido?.local),
@@ -775,7 +803,12 @@ function normalizarClavePartido(partido) {
     .filter(Boolean)
     .sort()
     .join('__');
-  return `${cat}|${fecha}|${equiposOrdenados}`;
+  return `${fecha}|${equiposOrdenados}`;
+}
+
+function normalizarClavePartido(partido) {
+  const cat = normalizarCategoria(partido?.categoria || '');
+  return `${cat}|${normalizarClavePartidoSinCategoria(partido)}`;
 }
 
 function normalizarClaveClasificacion(item) {
@@ -1347,8 +1380,7 @@ const PABELLONES = [
 
 const ENTRENOS = [
   { categoria: 'Juvenil / Cadete ♂ / ♀', dias: 'Lunes y Miércoles · 18:30 - 20:00' },
-  { categoria: 'Senior ♂ / ♀', dias: 'Martes y Jueves · 20:30 - 22:00' },
-  { categoria: 'Escuela / Base ♂ / ♀', dias: 'Martes y Jueves · 17:30 - 18:45' }
+  { categoria: 'Alevín / Benjamín ♂ / ♀', dias: 'Martes y Jueves · 17:30 - 18:45' }
 ];
 
 function perfilJugadorCompleto(p) {
@@ -1651,7 +1683,7 @@ export default function App() {
     setRefrescandoDatos(true);
     try {
       const peticiones = [
-        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(60))),
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(80))),
         getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
         getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(25))),
         getDocs(query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(8)))
@@ -2317,10 +2349,16 @@ export default function App() {
   const registrarPartidosSinDuplicar = async (candidatos, listaBase = partidos) => {
     let listaTrabajo = [...listaBase];
     const indicePorClave = new Map();
+    const indicePorClaveSinCat = new Map();
+
     listaTrabajo.forEach((p, idx) => {
       const k = normalizarClavePartido(p);
       if (k && !indicePorClave.has(k)) {
         indicePorClave.set(k, idx);
+      }
+      const kSinCat = normalizarClavePartidoSinCategoria(p);
+      if (kSinCat && !indicePorClaveSinCat.has(kSinCat)) {
+        indicePorClaveSinCat.set(kSinCat, idx);
       }
     });
 
@@ -2388,7 +2426,7 @@ export default function App() {
 
       const resultadoNormalizado = normalizarMarcadorPartido(cand.resultado || 'VS');
       const categoriaFinal = detectarCategoriaImportada(
-        cand.categoriaTexto || `${localCrudo} ${visitanteCrudo}`,
+        cand.categoriaTexto || `${localFinal} ${visitanteFinal} ${resultadoNormalizado}`,
         cand.categoria || ''
       );
 
@@ -2402,12 +2440,18 @@ export default function App() {
       };
 
       const clave = normalizarClavePartido(itemLimpio);
+      const claveSinCat = normalizarClavePartidoSinCategoria(itemLimpio);
       if (!clave) continue;
 
       procesados += 1;
 
-      if (indicePorClave.has(clave)) {
-        const idxExistente = indicePorClave.get(clave);
+      const idxExistente = indicePorClave.has(clave)
+        ? indicePorClave.get(clave)
+        : indicePorClaveSinCat.has(claveSinCat)
+        ? indicePorClaveSinCat.get(claveSinCat)
+        : -1;
+
+      if (idxExistente !== -1) {
         const actual = listaTrabajo[idxExistente];
         const resultadoAnterior = normalizarMarcadorPartido(actual?.resultado || 'VS');
         const resultadoFinal =
@@ -2426,7 +2470,8 @@ export default function App() {
           resultadoFinal !== resultadoAnterior ||
           fechaFinal !== fechaAnterior ||
           (pabellonFinal && pabellonFinal !== actual?.pabellon) ||
-          (categoriaFinal && categoriaFinal !== actual?.categoria);
+          (categoriaFinal &&
+            normalizarCategoria(categoriaFinal) !== normalizarCategoria(actual?.categoria));
 
         if (cambioDetectado) {
           const partidoActualizado = {
@@ -2452,9 +2497,12 @@ export default function App() {
       };
       listaTrabajo = [nuevoConId, ...listaTrabajo];
       indicePorClave.clear();
+      indicePorClaveSinCat.clear();
       listaTrabajo.forEach((p, idx) => {
         const k = normalizarClavePartido(p);
         if (k && !indicePorClave.has(k)) indicePorClave.set(k, idx);
+        const kSc = normalizarClavePartidoSinCategoria(p);
+        if (kSc && !indicePorClaveSinCat.has(kSc)) indicePorClaveSinCat.set(kSc, idx);
       });
       nuevosParaAlta.push({ idTemporal: nuevoConId.id, datos: itemLimpio });
     }
@@ -2813,9 +2861,21 @@ export default function App() {
 
       await cargarDatosUnaVez(true, false);
 
+      const baseCorregida = partidos.map((p) => {
+        const catActual = String(p?.categoria || '');
+        if (/^senior\b/i.test(catActual) || !catActual.trim()) {
+          const nuevaCat = detectarCategoriaImportada(`${p.local || ''} ${p.visitante || ''} ${p.resultado || ''}`);
+          if (firebaseOk && p?.id && !String(p.id).startsWith('demo') && !String(p.id).startsWith('sync_')) {
+            updateDoc(doc(db, 'partidos', p.id), { categoria: nuevaCat }).catch(() => {});
+          }
+          return { ...p, categoria: nuevaCat };
+        }
+        return p;
+      });
+
       const { añadidos, actualizados, listaResultante } = await registrarPartidosSinDuplicar(
         partidosDetectados,
-        partidos
+        baseCorregida
       );
 
       const { eliminadosFechas, eliminadosDuplicados } = await sanearPartidosInterno(listaResultante);
@@ -3098,28 +3158,32 @@ export default function App() {
   };
 
   const categoriasDisponibles = useMemo(() => {
-    const base = fuentesSincronizacion.map((f) => f.categoria).filter(Boolean);
-    const extras = [
-      ...partidos.map((p) => p.categoria),
-      ...clasificacion.map((c) => c.categoria)
-    ].filter(Boolean);
-
     const vistas = new Set();
     const lista = [];
-    for (const cat of [...base, ...extras]) {
+    for (const cat of CATEGORIAS_VISIBLES_CLUB) {
       const norm = normalizarCategoria(cat);
-      if (norm && !vistas.has(norm)) {
+      if (norm && !vistas.has(norm) && !norm.startsWith('senior')) {
         vistas.add(norm);
         lista.push(cat);
       }
     }
     return ['Todas', ...lista];
-  }, [fuentesSincronizacion, partidos, clasificacion]);
+  }, []);
 
   const partidosFiltradosPorCategoria = useMemo(() => {
     if (categoriaActiva === 'Todas') return partidos;
     const catNorm = normalizarCategoria(categoriaActiva);
-    return partidos.filter((p) => normalizarCategoria(p.categoria) === catNorm);
+    return partidos.filter((p) => {
+      const catPartido = normalizarCategoria(p.categoria);
+      if (catPartido === catNorm) return true;
+      if (!catPartido || catPartido.startsWith('senior')) {
+        const inferida = normalizarCategoria(
+          detectarCategoriaImportada(`${p.local || ''} ${p.visitante || ''} ${p.resultado || ''}`)
+        );
+        return inferida === catNorm;
+      }
+      return false;
+    });
   }, [partidos, categoriaActiva]);
 
   const clasificacionFiltrada = useMemo(() => {
