@@ -230,6 +230,120 @@ function extraerPartidosDeLineas(lineas, origenUrl, categoriaFuente = '') {
   return partidos;
 }
 
+function esCabeceraClasificacion(linea = '') {
+  const low = normalizarSinTildes(linea);
+  return /^#?\s*equipo\s+pts\b/i.test(low) ||
+    (/\bpts\b/i.test(low) && /\bpj\b/i.test(low) && /\bgf\b/i.test(low) && /\bgc\b/i.test(low));
+}
+
+function sanearNombreEquipoServidor(entrada = '') {
+  return String(entrada || '')
+    .replace(/^escudo\s+de\s+/i, '')
+    .replace(/^forma\s+\d+\s+/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function extraerClasificacionDeLineas(lineas, origenUrl, categoriaFuente = '') {
+  const filas = [];
+  const vistos = new Set();
+
+  for (let i = 0; i < lineas.length; i++) {
+    const linea = lineas[i];
+
+    const matchConPos = linea.match(/^(\d{1,2})\s*[.)-]??\s+(.+?)\s+([+-]?\d+(?:\s+[+-]?\d+){1,8})$/);
+    if (matchConPos) {
+      const pos = Number(matchConPos[1]);
+      const equipo = sanearNombreEquipoServidor(matchConPos[2]);
+      const nums = matchConPos[3].trim().split(/\s+/).map(Number);
+
+      if (equipo.length >= 2 && !esCabeceraClasificacion(equipo) && nums.length >= 2) {
+        let pts = 0, pj = 0, pg = 0, pe = 0, pp = 0, gf = 0, gc = 0, dif = 0;
+        if (nums.length >= 8) {
+          [pts, pj, pg, pe, pp, gf, gc, dif] = nums;
+        } else if (nums.length === 7) {
+          [pts, pj, pg, pe, pp, gf, gc] = nums;
+          dif = gf - gc;
+        } else if (nums.length >= 4) {
+          [pj, pts, gf, gc] = nums;
+          dif = gf - gc;
+        } else {
+          [pj, pts, gf] = nums;
+          gc = 0;
+          dif = gf - gc;
+        }
+
+        const clave = `${normalizarSinTildes(categoriaFuente)}|${normalizarSinTildes(equipo)}`;
+        if (!vistos.has(clave)) {
+          vistos.add(clave);
+          filas.push({
+            categoria: categoriaFuente || '',
+            pos,
+            equipo,
+            pts,
+            pj,
+            pg,
+            pe,
+            pp,
+            gf,
+            gc,
+            dif,
+            fuente: origenUrl
+          });
+        }
+      }
+      continue;
+    }
+
+    if (/^[+-]?\d+(?:\s+[+-]?\d+){3,8}$/.test(linea) && i >= 1) {
+      const nums = linea.trim().split(/\s+/).map(Number);
+      const candidatoNombre = sanearNombreEquipoServidor(lineas[i - 1]);
+      const posAnterior = i >= 2 && /^\d{1,2}\.?$/.test(lineas[i - 2])
+        ? Number(lineas[i - 2].replace('.', ''))
+        : filas.length + 1;
+
+      if (
+        candidatoNombre.length >= 2 &&
+        !/^\d+$/.test(candidatoNombre) &&
+        !esCabeceraClasificacion(candidatoNombre) &&
+        !/^escudo\s+de$/i.test(candidatoNombre)
+      ) {
+        let pts = 0, pj = 0, pg = 0, pe = 0, pp = 0, gf = 0, gc = 0, dif = 0;
+        if (nums.length >= 8) {
+          [pts, pj, pg, pe, pp, gf, gc, dif] = nums;
+        } else if (nums.length === 7) {
+          [pts, pj, pg, pe, pp, gf, gc] = nums;
+          dif = gf - gc;
+        } else if (nums.length >= 4) {
+          [pj, pts, gf, gc] = nums;
+          dif = gf - gc;
+        }
+
+        const clave = `${normalizarSinTildes(categoriaFuente)}|${normalizarSinTildes(candidatoNombre)}`;
+        if (!vistos.has(clave)) {
+          vistos.add(clave);
+          filas.push({
+            categoria: categoriaFuente || '',
+            pos: posAnterior,
+            equipo: candidatoNombre,
+            pts,
+            pj,
+            pg,
+            pe,
+            pp,
+            gf,
+            gc,
+            dif,
+            fuente: origenUrl
+          });
+        }
+      }
+    }
+  }
+
+  return filas;
+}
+
 function extraerPartidosDeScriptsHtml(html = '', origenUrl = '', categoriaFuente = '') {
   const partidos = [];
   const vistos = new Set();
@@ -243,7 +357,7 @@ function extraerPartidosDeScriptsHtml(html = '', origenUrl = '', categoriaFuente
       .replace(/[{}\[\],:]/g, '\n')
       .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
       .split('\n')
-      .map((s) => s.replace(/^["']|["']$/g, '').trim())
+      .map((s) => s.replace(/^["'']|["'']$/g, '').trim())
       .filter((s) => s.length >= 2 && s.length <= 140);
 
     const extraidos = extraerPartidosDeLineas(lineasJson, origenUrl, categoriaFuente);
@@ -323,6 +437,7 @@ export default async function handler(req, res) {
     }
 
     const todos = [];
+    const todaClasificacion = [];
     const errores = [];
 
     for (const url of listaUrls) {
@@ -348,6 +463,7 @@ export default async function handler(req, res) {
         const lineas = limpiarTexto(html);
         const extraidosTexto = extraerPartidosDeLineas(lineas, url, categoriaUrl);
         const extraidosScripts = extraerPartidosDeScriptsHtml(html, url, categoriaUrl);
+        const extraidaClasif = extraerClasificacionDeLineas(lineas, url, categoriaUrl);
 
         const combinados = [...extraidosTexto];
         for (const item of extraidosScripts) {
@@ -361,6 +477,14 @@ export default async function handler(req, res) {
         }
 
         todos.push(...combinados);
+        for (const fila of extraidaClasif) {
+          const yaEstaFila = todaClasificacion.some(
+            (f) =>
+              normalizarSinTildes(f.categoria) === normalizarSinTildes(fila.categoria) &&
+              normalizarSinTildes(f.equipo) === normalizarSinTildes(fila.equipo)
+          );
+          if (!yaEstaFila) todaClasificacion.push(fila);
+        }
       } catch (err) {
         errores.push({ url, motivo: err?.message || 'Error de conexión' });
       }
@@ -370,6 +494,7 @@ export default async function handler(req, res) {
       ok: true,
       categoriaActiva: categoriaActiva || '',
       partidos: todos,
+      clasificacion: todaClasificacion,
       errores
     });
   } catch (e) {
