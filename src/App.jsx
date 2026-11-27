@@ -209,7 +209,7 @@ function detectarCategoriaImportada(texto) {
   if (baseEncontrada) {
     return `${baseEncontrada} ${signo}`;
   }
-  return esFemenino ? 'Senior ♀' : 'Senior ♂';
+  return esFemenino ? 'Juvenil ♀' : 'Juvenil ♂';
 }
 
 function extraerFechaDeTexto(texto) {
@@ -941,7 +941,7 @@ function SelectorCategoriaYGenero({ valorActual, onChangeValor }) {
   const baseActual = CATEGORIAS_BASE.find((c) => textoActual.startsWith(c)) || '';
 
   const seleccionar = (nuevaBase, nuevoGenero) => {
-    const baseElegida = nuevaBase || baseActual || 'Senior';
+    const baseElegida = nuevaBase || baseActual || 'Juvenil';
     const generoElegido = nuevoGenero || generoActual || '♂';
     onChangeValor(`${baseElegida} ${generoElegido}`);
   };
@@ -1195,7 +1195,7 @@ function TarjetaMiPerfil({
 const DEMO_PARTIDOS = [
   {
     id: 'demo1',
-    categoria: 'Senior ♂',
+    categoria: 'Juvenil ♂',
     local: 'C.D. Rafael Altamira FS',
     visitante: 'Picanya Futsal B',
     fecha: 'Sábado 18:30',
@@ -1223,10 +1223,10 @@ const DEMO_CLASIFICACION = [
 ];
 
 const DEMO_PLANTILLA = [
-  { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Senior ♂', edad: '24', goles: 14, foto: '', telefono: '' },
-  { id: 'p2', dorsal: '7', nombre: 'Alejandro Ruiz', posicion: 'Ala', categoria: 'Senior ♂', edad: '22', goles: 11, foto: '', telefono: '' },
-  { id: 'p3', dorsal: '4', nombre: 'Javier Gómez', posicion: 'Cierre', categoria: 'Senior ♂', edad: '25', goles: 6, foto: '', telefono: '' },
-  { id: 'p4', dorsal: '1', nombre: 'Carlos Martínez', posicion: 'Portero', categoria: 'Senior ♂', edad: '27', goles: 1, foto: '', telefono: '' }
+  { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Juvenil ♂', edad: '17', goles: 14, foto: '', telefono: '' },
+  { id: 'p2', dorsal: '7', nombre: 'Alejandro Ruiz', posicion: 'Ala', categoria: 'Juvenil ♂', edad: '17', goles: 11, foto: '', telefono: '' },
+  { id: 'p3', dorsal: '4', nombre: 'Javier Gómez', posicion: 'Cierre', categoria: 'Juvenil ♂', edad: '18', goles: 6, foto: '', telefono: '' },
+  { id: 'p4', dorsal: '1', nombre: 'Carlos Martínez', posicion: 'Portero', categoria: 'Juvenil ♂', edad: '17', goles: 1, foto: '', telefono: '' }
 ];
 
 const DEMO_AVISOS = [
@@ -1260,8 +1260,8 @@ const PABELLONES = [
 ];
 
 const ENTRENOS = [
-  { categoria: 'Senior ♂ / ♀', dias: 'Martes y Jueves · 20:30 - 22:00' },
   { categoria: 'Juvenil / Cadete ♂ / ♀', dias: 'Lunes y Miércoles · 18:30 - 20:00' },
+  { categoria: 'Senior ♂ / ♀', dias: 'Martes y Jueves · 20:30 - 22:00' },
   { categoria: 'Escuela / Base ♂ / ♀', dias: 'Martes y Jueves · 17:30 - 18:45' }
 ];
 
@@ -2125,7 +2125,7 @@ export default function App() {
   };
 
   const [nuevoPartido, setNuevoPartido] = useState({
-    categoria: 'Senior ♂',
+    categoria: 'Juvenil ♂',
     local: 'C.D. Rafael Altamira FS',
     visitante: '',
     fecha: '',
@@ -2700,7 +2700,7 @@ export default function App() {
     guardarPartidosLocal(actualizada);
     setShowForm(false);
     setNuevoPartido({
-      categoria: 'Senior ♂',
+      categoria: 'Juvenil ♂',
       local: 'C.D. Rafael Altamira FS',
       visitante: '',
       fecha: '',
@@ -3091,23 +3091,18 @@ export default function App() {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span className={`tag ${esMarcadorJugado ? 'result' : ''}`} style={{ fontSize: 11, padding: '2px 7px' }}>
-              <TextoConSignoGenero texto={p.categoria} />
-            </span>
-            <span
-              className="tag"
-              style={{
-                fontSize: 11,
-                padding: '2px 7px',
-                ...(esMarcadorJugado
-                  ? { background: '#dcfce7', color: '#166534' }
-                  : { background: '#eff6ff', color: '#1e3a8a' })
-              }}
-            >
-              {esMarcadorJugado ? 'Jugado' : 'Por jugar'}
-            </span>
-          </div>
+          <span
+            className="tag"
+            style={{
+              fontSize: 11,
+              padding: '2px 7px',
+              ...(esMarcadorJugado
+                ? { background: '#dcfce7', color: '#166534' }
+                : { background: '#eff6ff', color: '#1e3a8a' })
+            }}
+          >
+            {esMarcadorJugado ? 'Jugado' : 'Por jugar'}
+          </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>
             Ver detalle ›
           </span>
@@ -3199,21 +3194,16 @@ export default function App() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span className={`tag ${esMarcadorJugado ? 'result' : ''}`}>
-                <TextoConSignoGenero texto={partidoModal.categoria} />
-              </span>
-              <span
-                className="tag"
-                style={
-                  esMarcadorJugado
-                    ? { background: '#dcfce7', color: '#166534' }
-                    : { background: '#eff6ff', color: '#1e3a8a' }
-                }
-              >
-                {esMarcadorJugado ? 'Partido jugado' : 'Próximo partido'}
-              </span>
-            </div>
+            <span
+              className="tag"
+              style={
+                esMarcadorJugado
+                  ? { background: '#dcfce7', color: '#166534' }
+                  : { background: '#eff6ff', color: '#1e3a8a' }
+              }
+            >
+              {esMarcadorJugado ? 'Partido jugado' : 'Próximo partido'}
+            </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {isAdmin && (
                 <button
