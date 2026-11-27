@@ -113,13 +113,6 @@ const FUENTES_CATEGORIAS_CLUB = [
   }
 ];
 
-const TEXTO_MUESTRA_CLASIFICACION = `#\tEquipo\tPJ\tG\tE\tP\tGF\tGC\tPTS
-1\tC.D. Juan Comenius\t1\t1\t0\t0\t11\t1\t3
-2\tEDELWEISS SCHOOL\t1\t1\t0\t0\t6\t4\t3
-3\tS.D. San Pedro Pascual\t2\t1\t0\t1\t13\t13\t3
-4\tC.E. La Anunciación\t1\t0\t0\t1\t4\t6\t0
-5\tC.D. Rafael Altamira Picanya\t1\t0\t0\t1\t2\t12\t0`;
-
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
 const REGEX_SOLO_JORNADA = /^jornada\s*\d+(\s*\([^)]*\))?$/i;
@@ -1367,8 +1360,6 @@ export default function App() {
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [refrescandoDatos, setRefrescandoDatos] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [showImportTablaBox, setShowImportTablaBox] = useState(false);
-  const [textoImportarClasificacion, setTextoImportarClasificacion] = useState('');
   const [fuentesSincronizacion] = useState(() => {
     const guardadas = leerListaLocal('cdra_fuentes_categorias', FUENTES_CATEGORIAS_CLUB);
     if (Array.isArray(guardadas) && guardadas.length > 0 && guardadas[0]?.url) {
@@ -2110,7 +2101,6 @@ export default function App() {
     setSesionIniciada(false);
     setIsAdmin(false);
     setShowForm(false);
-    setShowImportTablaBox(false);
     setEditandoAvisoId(null);
     setPartidoSeleccionadoId(null);
     setForzarOnboarding(false);
@@ -2182,7 +2172,6 @@ export default function App() {
       localStorage.removeItem('cdra_admin_activa');
       setIsAdmin(false);
       setShowForm(false);
-      setShowImportTablaBox(false);
       setEditandoAvisoId(null);
       return;
     }
@@ -2604,26 +2593,6 @@ export default function App() {
     return nuevosConId.length + actualizadosFirestore.length;
   };
 
-  const handleImportarClasificacionTexto = async (e) => {
-    e.preventDefault();
-    const catDestino = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
-    const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion, catDestino);
-    if (parseados.length === 0) {
-      alert('No se detectaron filas de clasificación válidas en el texto pegado.');
-      return;
-    }
-
-    const procesados = await registrarClasificacionSinDuplicar(parseados, catDestino);
-    if (procesados === 0) {
-      alert('Esos equipos ya estaban en la clasificación de esa categoría.');
-      return;
-    }
-
-    setTextoImportarClasificacion('');
-    setShowImportTablaBox(false);
-    alert(`¡Clasificación actualizada (${procesados} fila(s)) en ${catDestino}!`);
-  };
-
   const handleSubirEscudoEquipo = async (equipoItem, file) => {
     if (!isAdmin || !file) return;
     procesarFotoCircular(file, async (dataUrl) => {
@@ -2837,29 +2806,9 @@ export default function App() {
 
   const handleActualizarClasificacion = async () => {
     const catDestino = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
-    if (textoImportarClasificacion.trim()) {
-      const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion, catDestino);
-      if (parseados.length === 0) {
-        alert('No se detectaron filas de clasificación válidas en el texto pegado.');
-        return;
-      }
-      const procesados = await registrarClasificacionSinDuplicar(parseados, catDestino);
-      setTextoImportarClasificacion('');
-      setShowImportTablaBox(false);
-      alert(
-        procesados > 0
-          ? `¡Clasificación actualizada (${procesados} equipo(s)) en ${catDestino}!`
-          : `Clasificación al día en ${catDestino}.`
-      );
-      return;
-    }
-
-    if (showImportTablaBox) {
-      setShowImportTablaBox(false);
-      return;
-    }
-
+    setShowForm(false);
     setSincronizandoUrls(true);
+
     try {
       const fuenteActiva = fuentesSincronizacion.find(
         (f) => normalizarCategoria(f.categoria) === normalizarCategoria(catDestino)
@@ -2887,7 +2836,7 @@ export default function App() {
             }
           }
         } catch {
-          // Si no responde el endpoint, abrimos el cuadro de pegar clasificación
+          // Si falla la petición, refrescamos desde Firebase/estado actual
         }
       }
 
@@ -2895,8 +2844,8 @@ export default function App() {
         const procesados = await registrarClasificacionSinDuplicar(clasifDetectada, catDestino);
         alert(`¡Clasificación actualizada (${procesados} equipo(s)) en ${catDestino}!`);
       } else {
-        setShowImportTablaBox(true);
-        setShowForm(false);
+        await cargarDatosUnaVez(true, false);
+        alert(`Clasificación de ${catDestino} actualizada.`);
       }
     } finally {
       setSincronizandoUrls(false);
@@ -3783,7 +3732,6 @@ export default function App() {
               onClick={() => {
                 setTab('perfil');
                 setShowForm(false);
-                setShowImportTablaBox(false);
                 setEditandoAvisoId(null);
               }}
             >
@@ -3917,115 +3865,83 @@ export default function App() {
             </div>
 
             {ligaSubtab === 'tabla' && (
-              <>
-                {showImportTablaBox && (
-                  <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
-                    <div className="import-box-title">
-                      Actualizar clasificación ({categoriaActiva})
-                    </div>
-                    <p className="import-box-help">
-                      Pega aquí las filas de la clasificación (# Equipo PJ G E P GF GC PTS) y pulsa Actualizar:
-                    </p>
-                    <div className="import-box-actions">
-                      <button
-                        type="button"
-                        className="btn-rsvp"
-                        onClick={() => setTextoImportarClasificacion(TEXTO_MUESTRA_CLASIFICACION)}
-                      >
-                        Cargar muestra clasificación
-                      </button>
-                    </div>
-                    <textarea
-                      rows="6"
-                      placeholder={`Ejemplo:\n1\tC.D. Juan Comenius\t1\t1\t0\t0\t11\t1\t3`}
-                      value={textoImportarClasificacion}
-                      onChange={(e) => setTextoImportarClasificacion(e.target.value)}
-                      required
-                    />
-                    <button type="submit" className="btn-primary">
-                      Actualizar clasificación
-                    </button>
-                  </form>
-                )}
-
-                <div className="card table-wrap league-table-wrap">
-                  <table className="league-table">
-                    <thead>
-                      <tr>
-                        <th className="col-pos">#</th>
-                        <th className="col-team">Equipo</th>
-                        <th className="col-stat">PJ</th>
-                        <th className="col-stat">PG</th>
-                        <th className="col-stat">PE</th>
-                        <th className="col-stat">PP</th>
-                        <th className="col-stat">GF</th>
-                        <th className="col-stat">GC</th>
-                        <th className="col-stat">Dif</th>
-                        <th className="col-stat">Pts</th>
-                        {isAdmin && <th className="col-action"></th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clasificacionFiltrada.map((c, idx) => {
-                        const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
-                        const gf = Number(c.gf || 0);
-                        const gc = Number(c.gc || 0);
-                        const dif = calcularDifClasificacion(gf, gc, c.dif);
-                        return (
-                          <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
-                            <td className="col-pos col-pos-bold">
-                              {c.pos || idx + 1}
+              <div className="card table-wrap league-table-wrap">
+                <table className="league-table">
+                  <thead>
+                    <tr>
+                      <th className="col-pos">#</th>
+                      <th className="col-team">Equipo</th>
+                      <th className="col-stat">PJ</th>
+                      <th className="col-stat">PG</th>
+                      <th className="col-stat">PE</th>
+                      <th className="col-stat">PP</th>
+                      <th className="col-stat">GF</th>
+                      <th className="col-stat">GC</th>
+                      <th className="col-stat">Dif</th>
+                      <th className="col-stat">Pts</th>
+                      {isAdmin && <th className="col-action"></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clasificacionFiltrada.map((c, idx) => {
+                      const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
+                      const gf = Number(c.gf || 0);
+                      const gc = Number(c.gc || 0);
+                      const dif = calcularDifClasificacion(gf, gc, c.dif);
+                      return (
+                        <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
+                          <td className="col-pos col-pos-bold">
+                            {c.pos || idx + 1}
+                          </td>
+                          <td className="col-team">
+                            <div className="team-cell-inner">
+                              <AvatarCircular
+                                src={c.escudo}
+                                alt={nombreLimpio}
+                                letra={nombreLimpio?.[0] || 'E'}
+                                tamano={24}
+                              />
+                              <span title={nombreLimpio} className="team-name-truncate">
+                                {nombreLimpio}
+                              </span>
+                              {isAdmin && (
+                                <label className="shield-upload-btn" title="Subir escudo del equipo">
+                                  <Camera size={11} />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="file-input-hidden"
+                                    onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </td>
+                          <td className="col-stat">{c.pj ?? 0}</td>
+                          <td className="col-stat">{c.pg ?? 0}</td>
+                          <td className="col-stat">{c.pe ?? 0}</td>
+                          <td className="col-stat">{c.pp ?? 0}</td>
+                          <td className="col-stat">{gf}</td>
+                          <td className="col-stat">{gc}</td>
+                          <td className="col-stat col-dif-bold">
+                            {formatearDif(dif)}
+                          </td>
+                          <td className="col-stat">
+                            <strong className="pts-highlight">{c.pts ?? 0}</strong>
+                          </td>
+                          {isAdmin && (
+                            <td className="col-action">
+                              <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
+                                <Trash2 size={12} />
+                              </button>
                             </td>
-                            <td className="col-team">
-                              <div className="team-cell-inner">
-                                <AvatarCircular
-                                  src={c.escudo}
-                                  alt={nombreLimpio}
-                                  letra={nombreLimpio?.[0] || 'E'}
-                                  tamano={24}
-                                />
-                                <span title={nombreLimpio} className="team-name-truncate">
-                                  {nombreLimpio}
-                                </span>
-                                {isAdmin && (
-                                  <label className="shield-upload-btn" title="Subir escudo del equipo">
-                                    <Camera size={11} />
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="file-input-hidden"
-                                      onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
-                                    />
-                                  </label>
-                                )}
-                              </div>
-                            </td>
-                            <td className="col-stat">{c.pj ?? 0}</td>
-                            <td className="col-stat">{c.pg ?? 0}</td>
-                            <td className="col-stat">{c.pe ?? 0}</td>
-                            <td className="col-stat">{c.pp ?? 0}</td>
-                            <td className="col-stat">{gf}</td>
-                            <td className="col-stat">{gc}</td>
-                            <td className="col-stat col-dif-bold">
-                              {formatearDif(dif)}
-                            </td>
-                            <td className="col-stat">
-                              <strong className="pts-highlight">{c.pts ?? 0}</strong>
-                            </td>
-                            {isAdmin && (
-                              <td className="col-action">
-                                <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
-                                  <Trash2 size={12} />
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {ligaSubtab === 'goles' && (
@@ -4471,19 +4387,19 @@ export default function App() {
       {renderModalPartido()}
 
       <nav className="bottom-nav">
-        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setEditandoAvisoId(null); }}>
           <Calendar size={20} />
           <span>Partidos</span>
         </button>
-        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setEditandoAvisoId(null); }}>
           <Trophy size={20} />
           <span>Liga/Goles</span>
         </button>
-        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setEditandoAvisoId(null); }}>
           <Users size={20} />
           <span>Plantilla</span>
         </button>
-        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setEditandoAvisoId(null); }}>
           <Bell size={20} />
           <span>Avisos</span>
         </button>
