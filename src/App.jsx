@@ -32,8 +32,6 @@ import {
   Navigation,
   LogOut,
   UserPlus,
-  Download,
-  CopyX,
   Phone,
   RefreshCw,
   ExternalLink,
@@ -89,27 +87,6 @@ const URLS_POR_DEFECTO = [
   'https://futbuteo.com/valencia/equipo/c-d-rafael-altamira-picanya',
   'https://www.elbalondelacomunitat.es/equipo/905540140/partidos'
 ];
-
-const TEXTO_MUESTRA_FFCV = `Jornada 8 (15-11-2026)
-C.D. Rafael Altamira Picanya "A" - Descansa-1
-
-Jornada 9 (22-11-2026)
-C.D. Maguen Alfafar F.S. - C.D. Rafael Altamira Picanya "A"
-
-Jornada 10 (29-11-2026)
-C.D. Rafael Altamira Picanya "A" - Maristas Cullera
-
-Jornada 11 (06-12-2026)
-C.F.S. Aliança Quart de Poblet "A" - C.D. Rafael Altamira Picanya "A"
-
-Jornada 12 (13-12-2026)
-C.D. Rafael Altamira Picanya "A" - C.D. Inter Marjal
-
-Jornada 13 (20-12-2026)
-C.F.S. L'Olleria La Vall d'Albaida "A" - C.D. Rafael Altamira Picanya "A"
-
-Jornada 14 (10-01-2027)
-C.D. Rafael Altamira Picanya "A" - Santa Ana Algemesí C.D.`;
 
 const TEXTO_MUESTRA_CLASIFICACION = `#	Equipo	Pts	PJ	PG	PE	PP	GF	GC	Dif
 1	C.D. Corbera	25	9	8	1	0	59	10	+49
@@ -202,6 +179,15 @@ function esTextoFechaOJornada(texto) {
     return true;
   }
   return false;
+}
+
+function esRivalValido(rival) {
+  const lim = String(rival || '').trim();
+  return (
+    !esNombreInvalidoOResidual(lim) &&
+    !esTextoFechaOJornada(lim) &&
+    !/^(próximamente|proximamente|por confirmar|rival por confirmar)$/i.test(lim)
+  );
 }
 
 function detectarCategoriaImportada(texto) {
@@ -1341,11 +1327,9 @@ export default function App() {
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [refrescandoDatos, setRefrescandoDatos] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [showImportBox, setShowImportBox] = useState(false);
   const [showImportTablaBox, setShowImportTablaBox] = useState(false);
-  const [textoImportarPartidos, setTextoImportarPartidos] = useState('');
   const [textoImportarClasificacion, setTextoImportarClasificacion] = useState('');
-  const [urlsSincronizacion, setUrlsSincronizacion] = useState(() => {
+  const [urlsSincronizacion] = useState(() => {
     const guardadas = leerListaLocal('cdra_urls_partidos', URLS_POR_DEFECTO);
     const lista = Array.isArray(guardadas) && guardadas.length > 0 ? guardadas : URLS_POR_DEFECTO;
     if (!lista.includes(URLS_POR_DEFECTO[0])) {
@@ -1353,7 +1337,6 @@ export default function App() {
     }
     return lista;
   });
-  const [nuevaUrlInput, setNuevaUrlInput] = useState('');
   const [sincronizandoUrls, setSincronizandoUrls] = useState(false);
   const [escudoCargado, setEscudoCargado] = useState(true);
 
@@ -2085,7 +2068,6 @@ export default function App() {
     setSesionIniciada(false);
     setIsAdmin(false);
     setShowForm(false);
-    setShowImportBox(false);
     setShowImportTablaBox(false);
     setEditandoAvisoId(null);
     setPartidoSeleccionadoId(null);
@@ -2190,7 +2172,6 @@ export default function App() {
       localStorage.removeItem('cdra_admin_activa');
       setIsAdmin(false);
       setShowForm(false);
-      setShowImportBox(false);
       setShowImportTablaBox(false);
       setEditandoAvisoId(null);
       return;
@@ -2242,8 +2223,8 @@ export default function App() {
     }
   };
 
-  const registrarPartidosSinDuplicar = async (candidatos) => {
-    let listaTrabajo = [...partidos];
+  const registrarPartidosSinDuplicar = async (candidatos, listaBase = partidos) => {
+    let listaTrabajo = [...listaBase];
     const indicePorClave = new Map();
     listaTrabajo.forEach((p, idx) => {
       const k = normalizarClavePartido(p);
@@ -2291,6 +2272,10 @@ export default function App() {
         rivalLimpio = limpiarNombreRival(visitanteCrudo);
       } else if (localCrudo && !esTextoFechaOJornada(localCrudo)) {
         rivalLimpio = limpiarNombreRival(localCrudo);
+      }
+
+      if (!esRivalValido(rivalLimpio)) {
+        continue;
       }
 
       const clubLocal = 'C.D. Rafael Altamira FS';
@@ -2377,10 +2362,6 @@ export default function App() {
       nuevosParaAlta.push({ idTemporal: nuevoConId.id, datos: itemLimpio });
     }
 
-    if (nuevosParaAlta.length === 0 && actualizadosFirestore.length === 0) {
-      return { añadidos: 0, actualizados: 0 };
-    }
-
     guardarPartidosLocal(listaTrabajo);
 
     if (firebaseOk) {
@@ -2436,7 +2417,8 @@ export default function App() {
 
     return {
       añadidos: nuevosParaAlta.length,
-      actualizados: actualizadosFirestore.length
+      actualizados: actualizadosFirestore.length,
+      listaResultante: listaTrabajo
     };
   };
 
@@ -2565,86 +2547,57 @@ export default function App() {
     });
   };
 
-  const handleLimpiarDuplicadosPartidos = async () => {
-    const vistos = new Set();
-    const unicos = [];
-    const eliminados = [];
+  const sanearPartidosInterno = async (listaEntrada) => {
+    const partidosSinFechasComoRival = [];
+    const descartadosPorFechaORival = [];
 
-    for (const p of partidos) {
-      const clave = normalizarClavePartido(p);
-      if (!clave || vistos.has(clave)) {
-        eliminados.push(p);
+    for (const p of listaEntrada) {
+      const rival = esEquipoClubAltamira(p.local) && !esEquipoClubAltamira(p.visitante)
+        ? p.visitante
+        : esEquipoClubAltamira(p.visitante) && !esEquipoClubAltamira(p.local)
+        ? p.local
+        : p.visitante;
+
+      if (esRivalValido(rival)) {
+        partidosSinFechasComoRival.push(p);
       } else {
-        vistos.add(clave);
-        unicos.push(p);
+        descartadosPorFechaORival.push(p);
       }
     }
 
-    if (eliminados.length === 0) {
-      alert('No había partidos duplicados.');
-      return;
+    const vistos = new Set();
+    const partidosLimpios = [];
+    const duplicadosEliminados = [];
+
+    for (const p of partidosSinFechasComoRival) {
+      const clave = normalizarClavePartido(p);
+      if (!clave || vistos.has(clave)) {
+        duplicadosEliminados.push(p);
+      } else {
+        vistos.add(clave);
+        partidosLimpios.push(p);
+      }
     }
 
-    guardarPartidosLocal(unicos);
-    if (firebaseOk) {
+    guardarPartidosLocal(partidosLimpios);
+
+    const aBorrar = [...descartadosPorFechaORival, ...duplicadosEliminados];
+    if (firebaseOk && aBorrar.length > 0) {
       await Promise.allSettled(
-        eliminados
+        aBorrar
           .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
           .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
       );
     }
-    alert(`Se eliminaron ${eliminados.length} partido(s) duplicado(s).`);
-  };
 
-  const handleLimpiarPartidosSinRival = async () => {
-    const partidosValidos = partidos.filter((p) => {
-      const rival = p.local === 'C.D. Rafael Altamira FS' ? p.visitante : p.local;
-      return (
-        !esNombreInvalidoOResidual(rival) &&
-        !esTextoFechaOJornada(rival) &&
-        !/^(próximamente|proximamente|por confirmar|rival por confirmar)$/i.test(String(rival || '').trim())
-      );
-    });
-    const eliminados = partidos.filter((p) => !partidosValidos.some((v) => v.id === p.id));
-    if (eliminados.length === 0) {
-      alert('No hay partidos con fechas, jornadas o nombres incompletos como rival.');
-      return;
-    }
-    guardarPartidosLocal(partidosValidos);
-    if (firebaseOk) {
-      await Promise.allSettled(
-        eliminados
-          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
-          .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
-      );
-    }
-    alert(`Se eliminaron ${eliminados.length} partido(s) con datos incompletos o de fecha/jornada como rival.`);
-  };
-
-  const handleAgregarUrlSincronizacion = () => {
-    const limpia = nuevaUrlInput.trim();
-    if (!limpia) return;
-    if (!urlsSincronizacion.includes(limpia)) {
-      const actualizada = [...urlsSincronizacion, limpia];
-      setUrlsSincronizacion(actualizada);
-      guardarLocalSeguro('cdra_urls_partidos', actualizada);
-    }
-    setNuevaUrlInput('');
-  };
-
-  const handleQuitarUrlSincronizacion = (urlABorrar) => {
-    const actualizada = urlsSincronizacion.filter((u) => u !== urlABorrar);
-    setUrlsSincronizacion(actualizada);
-    guardarLocalSeguro('cdra_urls_partidos', actualizada);
+    return {
+      partidosLimpios,
+      eliminadosFechas: descartadosPorFechaORival.length,
+      eliminadosDuplicados: duplicadosEliminados.length
+    };
   };
 
   const sincronizarPartidosDesdeWebs = async (mostrarAvisoResultado = true) => {
-    if (urlsSincronizacion.length === 0) {
-      if (mostrarAvisoResultado) {
-        alert('Añade al menos una URL primero.');
-      }
-      return;
-    }
     setSincronizandoUrls(true);
     try {
       let partidosDetectados = [];
@@ -2652,77 +2605,85 @@ export default function App() {
       let huboRespuestaEndpoint = false;
       let motivosError = [];
 
-      try {
-        const resp = await fetch('/api/sincronizar-partidos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ urls: urlsSincronizacion })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.ok) {
-            huboRespuestaEndpoint = true;
-            partidosDetectados = Array.isArray(data.partidos) ? data.partidos : [];
-            clasifDetectada = Array.isArray(data.clasificacion) ? data.clasificacion : [];
-            if (Array.isArray(data.errores) && data.errores.length > 0) {
-              motivosError = data.errores.map((e) => e.motivo).filter(Boolean);
+      if (urlsSincronizacion.length > 0) {
+        try {
+          const resp = await fetch('/api/sincronizar-partidos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urls: urlsSincronizacion })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.ok) {
+              huboRespuestaEndpoint = true;
+              partidosDetectados = Array.isArray(data.partidos) ? data.partidos : [];
+              clasifDetectada = Array.isArray(data.clasificacion) ? data.clasificacion : [];
+              if (Array.isArray(data.errores) && data.errores.length > 0) {
+                motivosError = data.errores.map((e) => e.motivo).filter(Boolean);
+              }
             }
           }
+        } catch {
+          // Si no existe endpoint /api/sincronizar-partidos, probamos lectura directa
         }
-      } catch {
-        // Si no existe endpoint /api/sincronizar-partidos, probamos lectura directa
-      }
 
-      if (!huboRespuestaEndpoint || partidosDetectados.length === 0) {
-        for (const urlObjetivo of urlsSincronizacion) {
-          try {
-            const r = await fetch(urlObjetivo);
-            if (!r.ok) continue;
-            const cuerpo = await r.text();
-            const extraidos = cuerpo.trim().startsWith('<')
-              ? parsearPartidosDesdeHtml(cuerpo)
-              : parsearPartidosDesdeTexto(cuerpo);
-            if (extraidos.length > 0) {
-              partidosDetectados = [...partidosDetectados, ...extraidos];
+        if (!huboRespuestaEndpoint || partidosDetectados.length === 0) {
+          for (const urlObjetivo of urlsSincronizacion) {
+            try {
+              const r = await fetch(urlObjetivo);
+              if (!r.ok) continue;
+              const cuerpo = await r.text();
+              const extraidos = cuerpo.trim().startsWith('<')
+                ? parsearPartidosDesdeHtml(cuerpo)
+                : parsearPartidosDesdeTexto(cuerpo);
+              if (extraidos.length > 0) {
+                partidosDetectados = [...partidosDetectados, ...extraidos];
+              }
+            } catch {
+              // Bloqueo CORS o carga dinámica en cliente
             }
-          } catch {
-            // Bloqueo CORS o carga dinámica en cliente
           }
         }
       }
 
       await cargarDatosUnaVez(true, false);
 
-      const { añadidos, actualizados } = await registrarPartidosSinDuplicar(partidosDetectados);
+      const { añadidos, actualizados, listaResultante } = await registrarPartidosSinDuplicar(
+        partidosDetectados,
+        partidos
+      );
+
+      const { eliminadosFechas, eliminadosDuplicados } = await sanearPartidosInterno(listaResultante);
+
       if (clasifDetectada.length > 0) {
         await registrarClasificacionSinDuplicar(clasifDetectada);
       }
 
       if (mostrarAvisoResultado) {
+        const partesResumen = [];
+        if (añadidos > 0) partesResumen.push(`${añadidos} nuevo(s)`);
+        if (actualizados > 0) partesResumen.push(`${actualizados} actualizado(s)`);
+        if (eliminadosDuplicados > 0) partesResumen.push(`${eliminadosDuplicados} duplicado(s) limpio(s)`);
+        if (eliminadosFechas > 0) partesResumen.push(`${eliminadosFechas} sin rival/fecha limpio(s)`);
+
         const avisoBloqueos =
           motivosError.length > 0 && añadidos === 0 && actualizados === 0
-            ? `\nNota: la web puede cargar datos dinámicos o restringir lectura directa (${motivosError.join(', ')}). Puedes usar "Pegar texto" si falta algún partido.`
+            ? `\nNota: la web ha devuelto aviso (${motivosError.join(', ')}).`
             : '';
 
-        if (añadidos > 0 || actualizados > 0) {
-          alert(
-            `¡Partidos actualizados! ${añadidos} partido(s) nuevo(s) y ${actualizados} partido(s) jugado(s)/modificado(s) sincronizados.${avisoBloqueos}`
-          );
+        if (partesResumen.length > 0) {
+          alert(`Partidos actualizados: ${partesResumen.join(' · ')}.${avisoBloqueos}`);
         } else {
-          alert(`Partidos revisados y al día: no había cambios ni partidos nuevos.${avisoBloqueos}`);
+          alert(`Partidos al día y limpios: sin duplicados ni novedades.${avisoBloqueos}`);
         }
       }
     } catch {
       if (mostrarAvisoResultado) {
-        alert('No se pudo completar la sincronización automática. Usa "Pegar texto" si la web bloquea la lectura directa.');
+        alert('No se pudo completar la sincronización automática en este momento.');
       }
     } finally {
       setSincronizandoUrls(false);
     }
-  };
-
-  const handleSincronizarUrls = async () => {
-    await sincronizarPartidosDesdeWebs(true);
   };
 
   const handleAddPartido = async (e) => {
@@ -2754,25 +2715,6 @@ export default function App() {
         // Mantiene respaldo local
       }
     }
-  };
-
-  const handleImportarPartidosTexto = async (e) => {
-    e.preventDefault();
-    const parseados = parsearPartidosDesdeTexto(textoImportarPartidos);
-    if (parseados.length === 0) {
-      alert('No se encontraron partidos de C.D. Rafael Altamira en el texto pegado.');
-      return;
-    }
-
-    const { añadidos, actualizados } = await registrarPartidosSinDuplicar(parseados);
-    if (añadidos === 0 && actualizados === 0) {
-      alert('Esos partidos ya estaban registrados sin cambios (0 duplicados).');
-      return;
-    }
-
-    setTextoImportarPartidos('');
-    setShowImportBox(false);
-    alert(`¡Listo! ${añadidos} partido(s) nuevo(s) y ${actualizados} partido(s) actualizado(s).`);
   };
 
   const handleAddEquipoTabla = async (e) => {
@@ -3811,7 +3753,6 @@ export default function App() {
               onClick={() => {
                 setTab('perfil');
                 setShowForm(false);
-                setShowImportBox(false);
                 setShowImportTablaBox(false);
                 setEditandoAvisoId(null);
               }}
@@ -3872,48 +3813,19 @@ export default function App() {
                   className="btn-rsvp"
                   disabled={sincronizandoUrls || refrescandoDatos}
                   onClick={() => sincronizarPartidosDesdeWebs(true)}
-                  title="Actualizar partidos por jugar y jugados desde las webs vinculadas"
+                  title="Importar, actualizar y limpiar duplicados o fechas sin rival"
                 >
                   <RefreshCw size={14} />
                   {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
                 </button>
                 {isAdmin && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn-rsvp"
-                      onClick={handleLimpiarDuplicadosPartidos}
-                    >
-                      <CopyX size={14} /> Limpiar duplicados
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-rsvp"
-                      onClick={handleLimpiarPartidosSinRival}
-                    >
-                      <Trash2 size={14} /> Limpiar fechas
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-rsvp"
-                      onClick={() => {
-                        setShowImportBox(!showImportBox);
-                        setShowForm(false);
-                      }}
-                    >
-                      <Download size={14} /> Importar
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={() => {
-                        setShowForm(!showForm);
-                        setShowImportBox(false);
-                      }}
-                    >
-                      <Plus size={15} /> Partido
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => setShowForm(!showForm)}
+                  >
+                    <Plus size={15} /> Partido
+                  </button>
                 )}
               </div>
             </div>
@@ -3934,89 +3846,6 @@ export default function App() {
                 Jugados ({partidosJugados.length})
               </button>
             </div>
-
-            {isAdmin && showImportBox && (
-              <div className="form-box">
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
-                  Sincronizar webs o importar texto (sin duplicados)
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--muted)' }}>
-                    Webs configuradas ({urlsSincronizacion.length})
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input
-                      type="url"
-                      placeholder="Añadir otra URL (https://...)"
-                      value={nuevaUrlInput}
-                      onChange={(e) => setNuevaUrlInput(e.target.value)}
-                    />
-                    <button type="button" className="btn-rsvp" onClick={handleAgregarUrlSincronizacion}>
-                      + Web
-                    </button>
-                  </div>
-
-                  {urlsSincronizacion.map((u) => (
-                    <div
-                      key={u}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: 8,
-                        background: '#ffffff',
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        border: '1px solid var(--border)',
-                        fontSize: 12
-                      }}
-                    >
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u}</span>
-                      <button type="button" className="btn-danger" onClick={() => handleQuitarUrlSincronizacion(u)}>
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={sincronizandoUrls}
-                    onClick={handleSincronizarUrls}
-                  >
-                    <Download size={15} />
-                    {sincronizandoUrls ? 'Sincronizando webs...' : 'Sincronizar webs ahora'}
-                  </button>
-                </div>
-
-                <form onSubmit={handleImportarPartidosTexto} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-                  <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-                    Pega aquí las jornadas o enfrentamientos de Futbuteo, El balón de la Comunitat o FFCV y se añadirán o actualizarán sin duplicar:
-                  </p>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn-rsvp"
-                      onClick={() => setTextoImportarPartidos(TEXTO_MUESTRA_FFCV)}
-                    >
-                      Cargar muestra FFCV Altamira
-                    </button>
-                  </div>
-                  <textarea
-                    rows="5"
-                    placeholder={`Ejemplo:\nJornada 10 (29-11-2026)\nC.D. Rafael Altamira Picanya "A" - Maristas Cullera`}
-                    value={textoImportarPartidos}
-                    onChange={(e) => setTextoImportarPartidos(e.target.value)}
-                    required
-                  />
-                  <button type="submit" className="btn-rsvp" style={{ justifyContent: 'center' }}>
-                    <Download size={14} /> Añadir o actualizar partidos pegados
-                  </button>
-                </form>
-              </div>
-            )}
 
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddPartido}>
@@ -4080,7 +3909,7 @@ export default function App() {
                       setShowForm(false);
                     }}
                   >
-                    <Download size={14} /> Importar tabla
+                    Importar tabla
                   </button>
                   <button
                     type="button"
@@ -4132,7 +3961,7 @@ export default function App() {
                       required
                     />
                     <button type="submit" className="btn-primary">
-                      <Download size={15} /> Añadir clasificación sin duplicados
+                      Añadir clasificación sin duplicados
                     </button>
                   </form>
                 )}
@@ -4791,19 +4620,19 @@ export default function App() {
       {renderModalPartido()}
 
       <nav className="bottom-nav">
-        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Calendar size={20} />
           <span>Partidos</span>
         </button>
-        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Trophy size={20} />
           <span>Liga/Goles</span>
         </button>
-        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Users size={20} />
           <span>Plantilla</span>
         </button>
-        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Bell size={20} />
           <span>Avisos</span>
         </button>
