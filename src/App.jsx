@@ -93,29 +93,32 @@ const CATEGORIAS_VISIBLES_CLUB = [
 const FUENTES_CATEGORIAS_CLUB = [
   {
     categoria: 'Benjamín ♂',
-    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-benjamin-futbol-sala-escolar-grup-4-valencia'
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-benjamin-futbol-sala-escolar-grup-4-valencia#tabla'
   },
   {
     categoria: 'Juvenil ♂',
-    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-2a-regional-juvenil-futbol-sala-grup-3-valencia'
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-2a-regional-juvenil-futbol-sala-grup-3-valencia#tabla'
   },
   {
     categoria: 'Alevín ♂',
-    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-alevin-futbol-sala-escolar-grup-4-valencia'
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-alevin-futbol-sala-escolar-grup-4-valencia#tabla'
   },
   {
     categoria: 'Copa Valenta ♀',
-    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-iv-la-nostra-copa-valenta-futbol-sala-grup-2-valencia'
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-iv-la-nostra-copa-valenta-futbol-sala-grup-2-valencia#tabla'
   },
   {
     categoria: 'Promoción Valenta ♀',
-    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-liga-provincial-promocion-valenta-futbol-sala-grup-2-valencia'
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-liga-provincial-promocion-valenta-futbol-sala-grup-2-valencia#tabla'
   }
 ];
 
-const TEXTO_MUESTRA_CLASIFICACION = `#\tEquipo\tPts\tPJ\tPG\tPE\tPP\tGF\tGC\tDif
-1\tC.D. Corbera\t25\t9\t8\t1\t0\t59\t10\t+49
-2\tF.S. Picassent 'B'\t22\t9\t7\t1\t1\t50\t23\t+27`;
+const TEXTO_MUESTRA_CLASIFICACION = `#\tEquipo\tPJ\tG\tE\tP\tGF\tGC\tPTS
+1\tC.D. Juan Comenius\t1\t1\t0\t0\t11\t1\t3
+2\tEDELWEISS SCHOOL\t1\t1\t0\t0\t6\t4\t3
+3\tS.D. San Pedro Pascual\t2\t1\t0\t1\t13\t13\t3
+4\tC.E. La Anunciación\t1\t0\t0\t1\t4\t6\t0
+5\tC.D. Rafael Altamira Picanya\t1\t0\t0\t1\t2\t12\t0`;
 
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
@@ -534,8 +537,8 @@ function esLineaCabeceraOEscudo(linea) {
   const t = String(linea || '').trim();
   if (!t) return true;
   if (/^escudo\s+de\b/i.test(t)) return true;
-  if (/^#?\s*equipo\s+pts\b/i.test(t)) return true;
-  if (/^(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/i.test(t) && !/[a-z]{4,}/i.test(t.replace(/\b(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/gi, ''))) {
+  if (/^#?\s*equipo\s+(pts|pj)\b/i.test(t)) return true;
+  if (/^(pts|pj|pg|pe|pp|gf|gc|dif|forma|g|e|p)\b/i.test(t) && !/[a-z]{4,}/i.test(t.replace(/\b(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/gi, ''))) {
     return true;
   }
   return false;
@@ -652,13 +655,13 @@ function parsearClasificacionDesdeTexto(textoCrudo, categoriaForzada = '') {
         gc = nums[6];
         dif = nums[7];
       } else if (nums.length === 7) {
-        pts = nums[0];
-        pj = nums[1];
-        pg = nums[2];
-        pe = nums[3];
-        pp = nums[4];
-        gf = nums[5];
-        gc = nums[6];
+        pj = nums[0];
+        pg = nums[1];
+        pe = nums[2];
+        pp = nums[3];
+        gf = nums[4];
+        gc = nums[5];
+        pts = nums[6];
         dif = gf - gc;
       } else if (nums.length >= 4) {
         pj = nums[0] ?? 0;
@@ -1231,14 +1234,17 @@ const DEMO_PARTIDOS = [
 ];
 
 const DEMO_CLASIFICACION = [
-  { id: 'c_ben_1', categoria: 'Benjamín ♂', pos: 1, equipo: 'C.D. Juan Comenius', pts: 3, pj: 1, pg: 1, pe: 0, pp: 0, gf: 11, gc: 1, dif: 10, escudo: '' },
-  { id: 'c_ben_5', categoria: 'Benjamín ♂', pos: 5, equipo: 'C.D. Rafael Altamira Picanya', pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 12, dif: -10, escudo: '' },
-  { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: "S.D. San Pedro Pascual 'A'", pts: 6, pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, dif: 11, escudo: '' },
-  { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: "C.D. Rafael Altamira Picanya 'A'", pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, dif: -7, escudo: '' },
-  { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: "C.D. Corbera Lambert Logística y Gestión Port. 'A'", pts: 25, pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, dif: 49, escudo: '' },
-  { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: "C.D. Rafael Altamira Picanya 'A'", pts: 0, pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, dif: -26, escudo: '' },
-  { id: 'c_prom_1', categoria: 'Promoción Valenta ♀', pos: 1, equipo: 'C.D. Inter Marjal', pts: 21, pj: 7, pg: 7, pe: 0, pp: 0, gf: 43, gc: 3, dif: 40, escudo: '' },
-  { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: "C.D. Rafael Altamira Picanya 'A'", pts: 9, pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, dif: -14, escudo: '' }
+  { id: 'c_ben_1', categoria: 'Benjamín ♂', pos: 1, equipo: 'C.D. Juan Comenius', pj: 1, pg: 1, pe: 0, pp: 0, gf: 11, gc: 1, pts: 3, dif: 10, escudo: '' },
+  { id: 'c_ben_2', categoria: 'Benjamín ♂', pos: 2, equipo: 'EDELWEISS SCHOOL', pj: 1, pg: 1, pe: 0, pp: 0, gf: 6, gc: 4, pts: 3, dif: 2, escudo: '' },
+  { id: 'c_ben_3', categoria: 'Benjamín ♂', pos: 3, equipo: 'S.D. San Pedro Pascual', pj: 2, pg: 1, pe: 0, pp: 1, gf: 13, gc: 13, pts: 3, dif: 0, escudo: '' },
+  { id: 'c_ben_4', categoria: 'Benjamín ♂', pos: 4, equipo: 'C.E. La Anunciación', pj: 1, pg: 0, pe: 0, pp: 1, gf: 4, gc: 6, pts: 0, dif: -2, escudo: '' },
+  { id: 'c_ben_5', categoria: 'Benjamín ♂', pos: 5, equipo: 'C.D. Rafael Altamira Picanya', pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 12, pts: 0, dif: -10, escudo: '' },
+  { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: "S.D. San Pedro Pascual 'A'", pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, pts: 6, dif: 11, escudo: '' },
+  { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, pts: 0, dif: -7, escudo: '' },
+  { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: "C.D. Corbera Lambert Logística y Gestión Port. 'A'", pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, pts: 25, dif: 49, escudo: '' },
+  { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, pts: 0, dif: -26, escudo: '' },
+  { id: 'c_prom_1', categoria: 'Promoción Valenta ♀', pos: 1, equipo: 'C.D. Inter Marjal', pj: 7, pg: 7, pe: 0, pp: 0, gf: 43, gc: 3, pts: 21, dif: 40, escudo: '' },
+  { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, pts: 9, dif: -14, escudo: '' }
 ];
 
 const DEMO_PLANTILLA = [
@@ -2437,15 +2443,42 @@ export default function App() {
   };
 
   const registrarClasificacionSinDuplicar = async (candidatos, categoriaPorDefecto = '') => {
+    const catNormObjetivo = normalizarCategoria(categoriaPorDefecto || '');
+    let listaTrabajo = [...clasificacion];
+
+    if (catNormObjetivo && candidatos.length > 0) {
+      const escudosPrevios = new Map();
+      listaTrabajo.forEach((item) => {
+        if (normalizarCategoria(item.categoria) === catNormObjetivo && item.escudo) {
+          escudosPrevios.set(normalizarNombreEquipoClasificacion(item.equipo), item.escudo);
+        }
+      });
+
+      listaTrabajo = listaTrabajo.filter((item) => {
+        const mismaCat = normalizarCategoria(item.categoria) === catNormObjetivo;
+        const esDemo = /^c_?[a-z]*_?\d+$/i.test(String(item.id || ''));
+        return !(mismaCat && esDemo);
+      });
+
+      listaTrabajo = listaTrabajo.map((item) => {
+        if (normalizarCategoria(item.categoria) === catNormObjetivo && !item.escudo) {
+          const eqKey = normalizarNombreEquipoClasificacion(item.equipo);
+          if (escudosPrevios.has(eqKey)) {
+            return { ...item, escudo: escudosPrevios.get(eqKey) };
+          }
+        }
+        return item;
+      });
+    }
+
     const mapaExistentes = new Map();
-    clasificacion.forEach((item, idx) => {
+    listaTrabajo.forEach((item, idx) => {
       const k = normalizarClaveClasificacion(item);
       if (k && !mapaExistentes.has(k)) {
         mapaExistentes.set(k, idx);
       }
     });
 
-    let listaTrabajo = [...clasificacion];
     const nuevosConId = [];
     const actualizadosFirestore = [];
 
@@ -2828,14 +2861,6 @@ export default function App() {
 
     setSincronizandoUrls(true);
     try {
-      const { partidosCargados } = await cargarDatosUnaVez(true, false);
-      const basePartidos =
-        Array.isArray(partidosCargados) && partidosCargados.length > 0
-          ? partidosCargados
-          : partidos.length > 0
-          ? partidos
-          : DEMO_PARTIDOS;
-
       const fuenteActiva = fuentesSincronizacion.find(
         (f) => normalizarCategoria(f.categoria) === normalizarCategoria(catDestino)
       );
@@ -2868,12 +2893,7 @@ export default function App() {
 
       if (clasifDetectada.length > 0) {
         const procesados = await registrarClasificacionSinDuplicar(clasifDetectada, catDestino);
-        const partidosCat = basePartidos.filter(
-          (p) => normalizarCategoria(p.categoria) === normalizarCategoria(catDestino)
-        );
-        alert(
-          `Clasificación actualizada en ${catDestino}: ${procesados} fila(s) procesada(s) (${partidosCat.length} partido(s) en categoría).`
-        );
+        alert(`¡Clasificación actualizada (${procesados} equipo(s)) en ${catDestino}!`);
       } else {
         setShowImportTablaBox(true);
         setShowForm(false);
@@ -3028,7 +3048,8 @@ export default function App() {
 
   const clasificacionFiltrada = useMemo(() => {
     const catNorm = normalizarCategoria(categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0]);
-    return clasificacion
+    const fuenteClasif = clasificacion.length > 0 ? clasificacion : DEMO_CLASIFICACION;
+    return fuenteClasif
       .filter((c) => normalizarCategoria(c.categoria) === catNorm)
       .sort((a, b) => {
         if (Number(b.pts || 0) !== Number(a.pts || 0)) {
@@ -3903,7 +3924,7 @@ export default function App() {
                       Actualizar clasificación ({categoriaActiva})
                     </div>
                     <p className="import-box-help">
-                      Pega aquí las filas de la clasificación (# Equipo Pts PJ PG PE PP GF GC Dif) y pulsa Actualizar:
+                      Pega aquí las filas de la clasificación (# Equipo PJ G E P GF GC PTS) y pulsa Actualizar:
                     </p>
                     <div className="import-box-actions">
                       <button
@@ -3916,7 +3937,7 @@ export default function App() {
                     </div>
                     <textarea
                       rows="6"
-                      placeholder={`Ejemplo:\n1\tC.D. Corbera\t25\t9\t8\t1\t0\t59\t10\t+49`}
+                      placeholder={`Ejemplo:\n1\tC.D. Juan Comenius\t1\t1\t0\t0\t11\t1\t3`}
                       value={textoImportarClasificacion}
                       onChange={(e) => setTextoImportarClasificacion(e.target.value)}
                       required
@@ -3933,7 +3954,6 @@ export default function App() {
                       <tr>
                         <th className="col-pos">#</th>
                         <th className="col-team">Equipo</th>
-                        <th className="col-stat">Pts</th>
                         <th className="col-stat">PJ</th>
                         <th className="col-stat">PG</th>
                         <th className="col-stat">PE</th>
@@ -3941,6 +3961,7 @@ export default function App() {
                         <th className="col-stat">GF</th>
                         <th className="col-stat">GC</th>
                         <th className="col-stat">Dif</th>
+                        <th className="col-stat">Pts</th>
                         {isAdmin && <th className="col-action"></th>}
                       </tr>
                     </thead>
@@ -3979,9 +4000,6 @@ export default function App() {
                                 )}
                               </div>
                             </td>
-                            <td className="col-stat">
-                              <strong className="pts-highlight">{c.pts ?? 0}</strong>
-                            </td>
                             <td className="col-stat">{c.pj ?? 0}</td>
                             <td className="col-stat">{c.pg ?? 0}</td>
                             <td className="col-stat">{c.pe ?? 0}</td>
@@ -3990,6 +4008,9 @@ export default function App() {
                             <td className="col-stat">{gc}</td>
                             <td className="col-stat col-dif-bold">
                               {formatearDif(dif)}
+                            </td>
+                            <td className="col-stat">
+                              <strong className="pts-highlight">{c.pts ?? 0}</strong>
                             </td>
                             {isAdmin && (
                               <td className="col-action">
