@@ -13,10 +13,15 @@ function limpiarTexto(str = '') {
     .filter(Boolean);
 }
 
-function extraerPartidosDeLineas(lineas, origenUrl) {
+function esEquipoAltamira(texto = '') {
+  return /rafael altamira|picanya/i.test(String(texto));
+}
+
+function extraerPartidosDeLineas(lineas, origenUrl, categoriaFuente = '') {
   const regexDia = /^(LUNES|MARTES|MIERCOLES|MIÉRCOLES|JUEVES|VIERNES|SABADO|SÁBADO|DOMINGO)\s+\d+\s+[A-ZÁÉÍÓÚ]{3,}/i;
   let fechaActual = 'Próximamente';
   const partidos = [];
+  const vistos = new Set();
 
   for (let i = 0; i < lineas.length; i++) {
     const linea = lineas[i];
@@ -29,6 +34,8 @@ function extraerPartidosDeLineas(lineas, origenUrl) {
     if (!horaMatch && !/\b(CASA|FUERA|VS)\b/i.test(linea)) continue;
 
     const contexto = [lineas[i - 1] || '', linea, lineas[i + 1] || '', lineas[i + 2] || ''].join(' · ');
+    if (!esEquipoAltamira(contexto)) continue;
+
     const hora = horaMatch ? horaMatch[0] : '';
     const esFuera = /\bFUERA\b/i.test(contexto);
 
@@ -37,33 +44,40 @@ function extraerPartidosDeLineas(lineas, origenUrl) {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const rival =
-      segmentos.find((seg) => {
-        const low = seg.toLowerCase();
-        if (/^([01]?\d|2[0-3]):[0-5]\d$/.test(seg)) return false;
-        if (/^(casa|fuera|vs)$/i.test(seg)) return false;
-        if (regexDia.test(seg)) return false;
-        if (low.includes('rafael altamira') || low.includes('picanya')) return false;
-        if (
-          low.includes('fútbol sala') ||
-          low.includes('futbol sala') ||
-          low.includes('regional') ||
-          low.includes('provincial') ||
-          low.includes('valenta') ||
-          low.includes('copa') ||
-          low.includes('grup ')
-        ) {
-          return false;
-        }
-        return seg.length >= 2;
-      }) || 'Rival por confirmar';
+    const rival = segmentos.find((seg) => {
+      const low = seg.toLowerCase();
+      if (/^([01]?\d|2[0-3]):[0-5]\d$/.test(seg)) return false;
+      if (/^(casa|fuera|vs)$/i.test(seg)) return false;
+      if (regexDia.test(seg)) return false;
+      if (esEquipoAltamira(low)) return false;
+      if (
+        low.includes('fútbol sala') ||
+        low.includes('futbol sala') ||
+        low.includes('regional') ||
+        low.includes('provincial') ||
+        low.includes('valenta') ||
+        low.includes('copa') ||
+        low.includes('grup ')
+      ) {
+        return false;
+      }
+      return seg.length >= 3;
+    });
+
+    if (!rival) continue;
 
     const club = 'C.D. Rafael Altamira FS';
+    const fechaFinal = hora ? `${fechaActual} ${hora}` : fechaActual;
+    const clave = `${categoriaFuente}|${fechaFinal}|${rival.toLowerCase()}|${esFuera ? 'F' : 'C'}`;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+
     partidos.push({
+      categoria: categoriaFuente || '',
       categoriaTexto: contexto,
       local: esFuera ? rival : club,
       visitante: esFuera ? club : rival,
-      fecha: hora ? `${fechaActual} ${hora}` : fechaActual,
+      fecha: fechaFinal,
       pabellon: esFuera ? `Pabellón visitante (${rival})` : 'Pabellón Municipal Picanya',
       resultado: 'VS',
       fuente: origenUrl
@@ -79,9 +93,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { urls } = req.body || {};
+    const { urls, fuentes, categoriaActiva } = req.body || {};
+
+    const mapaCategoriaPorUrl = new Map();
+    if (Array.isArray(fuentes)) {
+      for (const f of fuentes) {
+        if (f?.url) {
+          mapaCategoriaPorUrl.set(String(f.url).trim(), String(f.categoria || '').trim());
+        }
+      }
+    }
+
     const listaUrls = Array.isArray(urls)
       ? urls.map((u) => String(u || '').trim()).filter(Boolean)
+      : Array.isArray(fuentes)
+      ? fuentes.map((f) => String(f?.url || '').trim()).filter(Boolean)
       : [];
 
     if (listaUrls.length === 0) {
@@ -105,6 +131,10 @@ export default async function handler(req, res) {
         continue;
       }
 
+      const categoriaUrl =
+        mapaCategoriaPorUrl.get(url) ||
+        (listaUrls.length === 1 ? String(categoriaActiva || '').trim() : '');
+
       try {
         const resp = await fetch(url, {
           headers: {
@@ -121,7 +151,7 @@ export default async function handler(req, res) {
 
         const html = await resp.text();
         const lineas = limpiarTexto(html);
-        const extraidos = extraerPartidosDeLineas(lineas, url);
+        const extraidos = extraerPartidosDeLineas(lineas, url, categoriaUrl);
         todos.push(...extraidos);
       } catch (err) {
         errores.push({ url, motivo: err?.message || 'Error de conexión' });
@@ -130,6 +160,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      categoriaActiva: categoriaActiva || '',
       partidos: todos,
       errores
     });
