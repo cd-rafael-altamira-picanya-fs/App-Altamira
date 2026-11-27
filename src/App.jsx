@@ -36,7 +36,8 @@ import {
   CopyX,
   Phone,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Pencil
 } from 'lucide-react';
 
 const NOMBRE_CLUB_APP = 'C.D. Rafael Altamira Picanya';
@@ -1406,6 +1407,12 @@ export default function App() {
   const [clasificacion, setClasificacion] = useState(() => leerListaLocal('cdra_clasificacion_local', DEMO_CLASIFICACION));
   const [plantilla, setPlantilla] = useState(() => leerListaLocal('cdra_plantilla_local', DEMO_PLANTILLA));
   const [avisos, setAvisos] = useState(() => leerListaLocal('cdra_avisos_local', DEMO_AVISOS));
+  const [editandoAvisoId, setEditandoAvisoId] = useState(null);
+  const [formEdicionAviso, setFormEdicionAviso] = useState({
+    titulo: '',
+    mensaje: '',
+    urgente: false
+  });
 
   const partidosLenRef = useRef(partidos.length);
   const clasifLenRef = useRef(clasificacion.length);
@@ -2040,6 +2047,7 @@ export default function App() {
     setShowForm(false);
     setShowImportBox(false);
     setShowImportTablaBox(false);
+    setEditandoAvisoId(null);
     setForzarOnboarding(false);
     setModoRegistroJugador(false);
     setIdentificadorLoginInput('');
@@ -2143,6 +2151,7 @@ export default function App() {
       setShowForm(false);
       setShowImportBox(false);
       setShowImportTablaBox(false);
+      setEditandoAvisoId(null);
       return;
     }
     const pin = window.prompt('Introduce el PIN de Directiva:');
@@ -2711,7 +2720,59 @@ export default function App() {
     }
   };
 
+  const handleIniciarEdicionAviso = (aviso) => {
+    if (!puedePublicarAvisos) return;
+    setShowForm(false);
+    setEditandoAvisoId(aviso.id);
+    setFormEdicionAviso({
+      titulo: aviso.titulo || '',
+      mensaje: aviso.mensaje || '',
+      urgente: Boolean(aviso.urgente)
+    });
+  };
+
+  const handleCancelarEdicionAviso = () => {
+    setEditandoAvisoId(null);
+    setFormEdicionAviso({ titulo: '', mensaje: '', urgente: false });
+  };
+
+  const handleGuardarEdicionAviso = async (e, avisoId) => {
+    e.preventDefault();
+    if (!puedePublicarAvisos) {
+      alert('Solo Directiva o un entrenador pueden editar avisos.');
+      return;
+    }
+    const tituloLimpio = String(formEdicionAviso.titulo || '').trim();
+    const mensajeLimpio = String(formEdicionAviso.mensaje || '').trim();
+    if (!tituloLimpio || !mensajeLimpio) {
+      alert('El título y el mensaje del aviso son obligatorios.');
+      return;
+    }
+
+    const cambios = {
+      titulo: tituloLimpio,
+      mensaje: mensajeLimpio,
+      urgente: Boolean(formEdicionAviso.urgente)
+    };
+
+    const actualizada = avisos.map((a) => (a.id === avisoId ? { ...a, ...cambios } : a));
+    guardarAvisosLocal(actualizada);
+    setEditandoAvisoId(null);
+    setFormEdicionAviso({ titulo: '', mensaje: '', urgente: false });
+
+    if (firebaseOk && !/^a\d+$/.test(String(avisoId || ''))) {
+      try {
+        await updateDoc(doc(db, 'avisos', avisoId), cambios);
+      } catch {
+        // Mantiene respaldo local
+      }
+    }
+  };
+
   const handleDelete = async (col, id) => {
+    if (col === 'avisos' && editandoAvisoId === id) {
+      handleCancelarEdicionAviso();
+    }
     if (col === 'partidos') {
       guardarPartidosLocal(partidos.filter((x) => x.id !== id));
     } else if (col === 'clasificacion') {
@@ -3347,6 +3408,7 @@ export default function App() {
                 setShowForm(false);
                 setShowImportBox(false);
                 setShowImportTablaBox(false);
+                setEditandoAvisoId(null);
               }}
             >
               <User size={14} /> Perfil
@@ -3959,7 +4021,13 @@ export default function App() {
                   </button>
                 )}
                 {puedePublicarAvisos && avisosSubtab === 'avisos' && (
-                  <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setShowForm(!showForm);
+                      setEditandoAvisoId(null);
+                    }}
+                  >
                     <Plus size={15} /> Aviso
                   </button>
                 )}
@@ -3989,22 +4057,88 @@ export default function App() {
                   </form>
                 )}
 
-                {avisos.map((a) => (
-                  <div key={a.id} className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className={`tag ${a.urgente ? 'urgent' : ''}`}>
-                        {a.urgente ? 'Urgente' : 'Comunicado'}
-                      </span>
-                      {isAdmin && (
-                        <button className="btn-danger" onClick={() => handleDelete('avisos', a.id)}>
-                          <Trash2 size={14} />
-                        </button>
+                {avisos.map((a) => {
+                  const estaEditando = editandoAvisoId === a.id && puedePublicarAvisos;
+                  return (
+                    <div key={a.id} className="card">
+                      {estaEditando ? (
+                        <form
+                          onSubmit={(e) => handleGuardarEdicionAviso(e, a.id)}
+                          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+                        >
+                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+                            Editar aviso
+                          </div>
+                          <input
+                            placeholder="Título del aviso *"
+                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                            value={formEdicionAviso.titulo}
+                            onChange={(e) => setFormEdicionAviso({ ...formEdicionAviso, titulo: e.target.value })}
+                            required
+                          />
+                          <textarea
+                            rows="3"
+                            placeholder="Mensaje para jugadores y familias *"
+                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}
+                            value={formEdicionAviso.mensaje}
+                            onChange={(e) => setFormEdicionAviso({ ...formEdicionAviso, mensaje: e.target.value })}
+                            required
+                          />
+                          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input
+                              type="checkbox"
+                              style={{ width: 'auto' }}
+                              checked={formEdicionAviso.urgente}
+                              onChange={(e) => setFormEdicionAviso({ ...formEdicionAviso, urgente: e.target.checked })}
+                            />
+                            Marcar como Urgente
+                          </label>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button type="submit" className="btn-primary">
+                              Guardar cambios
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-rsvp"
+                              onClick={handleCancelarEdicionAviso}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <span className={`tag ${a.urgente ? 'urgent' : ''}`}>
+                              {a.urgente ? 'Urgente' : 'Comunicado'}
+                            </span>
+                            {(puedePublicarAvisos || isAdmin) && (
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                {puedePublicarAvisos && (
+                                  <button
+                                    type="button"
+                                    className="btn-rsvp"
+                                    title="Editar aviso"
+                                    onClick={() => handleIniciarEdicionAviso(a)}
+                                  >
+                                    <Pencil size={13} /> Editar
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button className="btn-danger" onClick={() => handleDelete('avisos', a.id)}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{a.titulo}</h3>
+                          <p style={{ fontSize: 14, color: '#334155', lineHeight: 1.45 }}>{a.mensaje}</p>
+                        </>
                       )}
                     </div>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{a.titulo}</h3>
-                    <p style={{ fontSize: 14, color: '#334155', lineHeight: 1.45 }}>{a.mensaje}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
 
@@ -4238,19 +4372,19 @@ export default function App() {
       </main>
 
       <nav className="bottom-nav">
-        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+        <button className={`nav-item ${tab === 'partidos' ? 'active' : ''}`} onClick={() => { setTab('partidos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Calendar size={20} />
           <span>Partidos</span>
         </button>
-        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+        <button className={`nav-item ${tab === 'liga' ? 'active' : ''}`} onClick={() => { setTab('liga'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Trophy size={20} />
           <span>Liga/Goles</span>
         </button>
-        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+        <button className={`nav-item ${tab === 'plantilla' ? 'active' : ''}`} onClick={() => { setTab('plantilla'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Users size={20} />
           <span>Plantilla</span>
         </button>
-        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); }}>
+        <button className={`nav-item ${tab === 'avisos' ? 'active' : ''}`} onClick={() => { setTab('avisos'); setShowForm(false); setShowImportBox(false); setShowImportTablaBox(false); setEditandoAvisoId(null); }}>
           <Bell size={20} />
           <span>Avisos</span>
         </button>
