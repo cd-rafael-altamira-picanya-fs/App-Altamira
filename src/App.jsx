@@ -3218,7 +3218,7 @@ export default function App() {
         className={`card match-compact-card ${esMarcadorJugado ? 'is-played' : 'is-upcoming'}`}
       >
         <div className="match-compact-top">
-          <span className={`tag match-status-tag ${esMarcadorJugado ? 'result' : 'upcoming'}`}
+          <span className={`tag match-status-tag ${esMarcadorJugado ? 'result' : 'upcoming'}`}>
             {esMarcadorJugado ? 'Jugado' : 'Por jugar'}
           </span>
           <span className="match-detail-link">Ver detalle ›</span>
@@ -3226,7 +3226,7 @@ export default function App() {
 
         <div className="match-compact-teams">
           <span className="match-team-home">{localTexto}</span>
-          <span className={`match-score match-score-compact ${esMarcadorJugado ? 'played' : ''}`}
+          <span className={`match-score match-score-compact ${esMarcadorJugado ? 'played' : ''}`}>
             {marcadorVisible}
           </span>
           <span className="match-team-away">{visitanteTexto}</span>
@@ -3236,7 +3236,7 @@ export default function App() {
           <span className="match-compact-time">
             <Clock size={12} /> {fechaRescatada}
           </span>
-          <span className={`match-compact-rsvp ${voy ? 'going' : ''}`}
+          <span className={`match-compact-rsvp ${voy ? 'going' : ''}`}>
             {voy ? '✓ Voy' : `${asistentes.length} conv.`}
           </span>
         </div>
@@ -3262,7 +3262,7 @@ export default function App() {
       <div className="modal-backdrop" onClick={() => setPartidoSeleccionadoId(null)}>
         <div className="card modal-card" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <span className={`tag ${esMarcadorJugado ? 'result' : 'upcoming'}`}
+            <span className={`tag ${esMarcadorJugado ? 'result' : 'upcoming'}`}>
               {esMarcadorJugado ? 'Partido jugado' : 'Próximo partido'}
             </span>
             <div className="modal-header-actions">
@@ -3289,7 +3289,7 @@ export default function App() {
             <div className="modal-scoreboard-label">Equipos enfrentados</div>
             <div className="match-teams modal-teams">
               <span className="modal-team-home">{localTexto}</span>
-              <span className={`match-score modal-score ${esMarcadorJugado ? 'played' : ''}`}
+              <span className={`match-score modal-score ${esMarcadorJugado ? 'played' : ''}`}>
                 {marcadorVisible}
               </span>
               <span className="modal-team-away">{visitanteTexto}</span>
@@ -3784,9 +3784,9 @@ export default function App() {
 
       <main className="container">
         {alertaAvisoEntrante && (
-          <div className={`card alert-banner ${alertaAvisoEntrante.urgente ? 'is-urgent' : 'is-normal'}`}
+          <div className={`card alert-banner ${alertaAvisoEntrante.urgente ? 'is-urgent' : 'is-normal'}`}>
             <div className="alert-banner-top">
-              <span className={`tag ${alertaAvisoEntrante.urgente ? 'urgent' : ''}`}
+              <span className={`tag ${alertaAvisoEntrante.urgente ? 'urgent' : ''}`}>
                 {alertaAvisoEntrante.urgente ? '🚨 Aviso Urgente' : '🔔 Nuevo Aviso del Club'}
               </span>
               <button
@@ -4190,7 +4190,7 @@ export default function App() {
                       ) : (
                         <>
                           <div className="aviso-card-top">
-                            <span className={`tag ${a.urgente ? 'urgent' : ''}`}
+                            <span className={`tag ${a.urgente ? 'urgent' : ''}`}>
                               {a.urgente ? 'Urgente' : 'Comunicado'}
                             </span>
                             {(puedePublicarAvisos || isAdmin) && (
