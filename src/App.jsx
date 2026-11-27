@@ -792,7 +792,8 @@ function normalizarFechaClave(fechaStr) {
     .trim();
 }
 
-function normalizarClavePartidoSinCategoria(partido) {
+function normalizarClavePartido(partido) {
+  const cat = normalizarCategoria(partido?.categoria || '');
   const fecha = normalizarFechaClave(partido?.fecha);
   const equiposOrdenados = [
     normalizarEquipoClave(partido?.local),
@@ -801,12 +802,7 @@ function normalizarClavePartidoSinCategoria(partido) {
     .filter(Boolean)
     .sort()
     .join('__');
-  return `${fecha}|${equiposOrdenados}`;
-}
-
-function normalizarClavePartido(partido) {
-  const cat = normalizarCategoria(partido?.categoria || '');
-  return `${cat}|${normalizarClavePartidoSinCategoria(partido)}`;
+  return `${cat}|${fecha}|${equiposOrdenados}`;
 }
 
 function normalizarClaveClasificacion(item) {
@@ -1470,10 +1466,6 @@ export default function App() {
     }
     return FUENTES_CATEGORIAS_CLUB;
   });
-  const urlsSincronizacion = useMemo(
-    () => fuentesSincronizacion.map((f) => f.url).filter(Boolean),
-    [fuentesSincronizacion]
-  );
   const [sincronizandoUrls, setSincronizandoUrls] = useState(false);
   const [escudoCargado, setEscudoCargado] = useState(true);
 
@@ -2367,16 +2359,11 @@ export default function App() {
   const registrarPartidosSinDuplicar = async (candidatos, listaBase = partidos) => {
     let listaTrabajo = [...listaBase];
     const indicePorClave = new Map();
-    const indicePorClaveSinCat = new Map();
 
     listaTrabajo.forEach((p, idx) => {
       const k = normalizarClavePartido(p);
       if (k && !indicePorClave.has(k)) {
         indicePorClave.set(k, idx);
-      }
-      const kSinCat = normalizarClavePartidoSinCategoria(p);
-      if (kSinCat && !indicePorClaveSinCat.has(kSinCat)) {
-        indicePorClaveSinCat.set(kSinCat, idx);
       }
     });
 
@@ -2458,16 +2445,11 @@ export default function App() {
       };
 
       const clave = normalizarClavePartido(itemLimpio);
-      const claveSinCat = normalizarClavePartidoSinCategoria(itemLimpio);
       if (!clave) continue;
 
       procesados += 1;
 
-      const idxExistente = indicePorClave.has(clave)
-        ? indicePorClave.get(clave)
-        : indicePorClaveSinCat.has(claveSinCat)
-        ? indicePorClaveSinCat.get(claveSinCat)
-        : -1;
+      const idxExistente = indicePorClave.has(clave) ? indicePorClave.get(clave) : -1;
 
       if (idxExistente !== -1) {
         const actual = listaTrabajo[idxExistente];
@@ -2515,12 +2497,9 @@ export default function App() {
       };
       listaTrabajo = [nuevoConId, ...listaTrabajo];
       indicePorClave.clear();
-      indicePorClaveSinCat.clear();
       listaTrabajo.forEach((p, idx) => {
         const k = normalizarClavePartido(p);
         if (k && !indicePorClave.has(k)) indicePorClave.set(k, idx);
-        const kSc = normalizarClavePartidoSinCategoria(p);
-        if (kSc && !indicePorClaveSinCat.has(kSc)) indicePorClaveSinCat.set(kSc, idx);
       });
       nuevosParaAlta.push({ idTemporal: nuevoConId.id, datos: itemLimpio });
     }
@@ -2825,14 +2804,10 @@ export default function App() {
   const sincronizarPartidosDesdeWebs = async (mostrarAvisoResultado = true) => {
     setSincronizandoUrls(true);
     const catActual = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
-    const fuentesPrioritarias = [
-      ...fuentesSincronizacion.filter(
-        (f) => normalizarCategoria(f.categoria) === normalizarCategoria(catActual)
-      ),
-      ...fuentesSincronizacion.filter(
-        (f) => normalizarCategoria(f.categoria) !== normalizarCategoria(catActual)
-      )
-    ];
+    const fuenteActiva = fuentesSincronizacion.find(
+      (f) => normalizarCategoria(f.categoria) === normalizarCategoria(catActual)
+    );
+    const fuentesObjetivo = fuenteActiva ? [fuenteActiva] : [];
 
     try {
       let partidosDetectados = [];
@@ -2840,15 +2815,15 @@ export default function App() {
       let huboRespuestaEndpoint = false;
       let motivosError = [];
 
-      if (fuentesPrioritarias.length > 0) {
+      if (fuentesObjetivo.length > 0) {
         try {
           const resp = await fetch('/api/sincronizar-partidos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               categoriaActiva: catActual,
-              urls: fuentesPrioritarias.map((f) => f.url),
-              fuentes: fuentesPrioritarias
+              urls: fuentesObjetivo.map((f) => f.url),
+              fuentes: fuentesObjetivo
             })
           });
           if (resp.ok) {
@@ -2872,7 +2847,7 @@ export default function App() {
         }
 
         if (!huboRespuestaEndpoint || partidosDetectados.length === 0) {
-          for (const fuente of fuentesPrioritarias) {
+          for (const fuente of fuentesObjetivo) {
             try {
               const r = await fetch(fuente.url);
               if (!r.ok) continue;
