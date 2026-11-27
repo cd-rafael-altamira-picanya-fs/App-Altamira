@@ -43,8 +43,8 @@ const NOMBRE_CREADOR_APP = '@dagakol';
 const PIN_INICIAL_OBLIGATORIO = '1234';
 const PIN_DIRECTIVA_INICIAL = '1980';
 const MAX_PERFILES_ESPECIALES_DIRECTIVA = 4;
-const MAX_PARTIDOS_POR_IMPORTACION = 50;
-const MAX_EQUIPOS_CLASIFICACION = 20;
+const MAX_PARTIDOS_POR_IMPORTACION = 80;
+const MAX_EQUIPOS_CLASIFICACION = 30;
 const TTL_SINCRONIZACION_MS = 6 * 60 * 60 * 1000;
 
 const REDES_SOCIALES_CLUB = [
@@ -78,19 +78,40 @@ const CATEGORIAS_BASE = [
   'Prebenjamín'
 ];
 
-const CATEGORIAS_CLUB = CATEGORIAS_BASE.flatMap((cat) => [
-  `${cat} ♂`,
-  `${cat} ♀`
-]);
-
-const URLS_POR_DEFECTO = [
-  'https://futbuteo.com/valencia/equipo/c-d-rafael-altamira-picanya',
-  'https://www.elbalondelacomunitat.es/equipo/905540140/partidos'
+const CATEGORIAS_CLUB = [
+  ...CATEGORIAS_BASE.flatMap((cat) => [`${cat} ♂`, `${cat} ♀`]),
+  'Copa Valenta ♀',
+  'Promoción Valenta ♀'
 ];
 
-const TEXTO_MUESTRA_CLASIFICACION = `#	Equipo	Pts	PJ	PG	PE	PP	GF	GC	Dif
-1	C.D. Corbera	25	9	8	1	0	59	10	+49
-2	F.S. Picassent 'B'	22	9	7	1	1	50	23	+27`;
+const FUENTES_CATEGORIAS_CLUB = [
+  {
+    categoria: 'Benjamín ♂',
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-benjamin-futbol-sala-escolar-grup-4-valencia'
+  },
+  {
+    categoria: 'Juvenil ♂',
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-2a-regional-juvenil-futbol-sala-grup-3-valencia'
+  },
+  {
+    categoria: 'Alevín ♂',
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-alevin-futbol-sala-escolar-grup-4-valencia'
+  },
+  {
+    categoria: 'Copa Valenta ♀',
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-iv-la-nostra-copa-valenta-futbol-sala-grup-2-valencia'
+  },
+  {
+    categoria: 'Promoción Valenta ♀',
+    url: 'https://futbuteo.com/valencia/club/team_panel/c-d-rafael-altamira-picanya-a-liga-provincial-promocion-valenta-futbol-sala-grup-2-valencia'
+  }
+];
+
+const URLS_POR_DEFECTO = FUENTES_CATEGORIAS_CLUB.map((f) => f.url);
+
+const TEXTO_MUESTRA_CLASIFICACION = `#\tEquipo\tPts\tPJ\tPG\tPE\tPP\tGF\tGC\tDif
+1\tC.D. Corbera\t25\t9\t8\t1\t0\t59\t10\t+49
+2\tF.S. Picassent 'B'\t22\t9\t7\t1\t1\t50\t23\t+27`;
 
 const REGEX_FECHA_TEXTO = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
 const REGEX_DIA_FECHA_LARGA = /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s*,?\s*\d{1,2}\s+(de\s+)?[a-záéíóú]{3,}(\s+de\s+\d{4})?$/i;
@@ -146,7 +167,7 @@ function obtenerUrlGoogleMapsPabellon(pabellonTexto, rivalTexto = '') {
         ? rivalLimpio
         : dentroParentesis;
 
-    consulta = /pabell[oó]n|polideportivo|campo|pista/i.test(nombreObjetivo)
+    consulta = /pabell[oó]n|polideportivo|campo|pista|colegio|pavell[oó]/i.test(nombreObjetivo)
       ? `${nombreObjetivo}, Valencia`
       : `Pabellón ${nombreObjetivo}, Valencia`;
   } else if (!/valencia/i.test(consulta)) {
@@ -190,17 +211,26 @@ function esRivalValido(rival) {
   );
 }
 
-function detectarCategoriaImportada(texto) {
-  const t = String(texto || '').toLowerCase();
-  const esFemenino = t.includes('valenta') || t.includes('femenin') || t.includes('♀');
+function detectarCategoriaImportada(texto, categoriaForzada = '') {
+  if (categoriaForzada && String(categoriaForzada).trim()) {
+    return String(categoriaForzada).trim();
+  }
+
+  const raw = String(texto || '');
+  const tLimpio = raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const esFemenino =
+    tLimpio.includes('valenta') ||
+    tLimpio.includes('femenin') ||
+    raw.includes('♀');
   const signo = esFemenino ? '♀' : '♂';
 
   const baseEncontrada = CATEGORIAS_BASE.find((cat) => {
     const limpio = cat
       .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-    const tLimpio = t
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
     return tLimpio.includes(limpio);
@@ -209,7 +239,18 @@ function detectarCategoriaImportada(texto) {
   if (baseEncontrada) {
     return `${baseEncontrada} ${signo}`;
   }
-  return esFemenino ? 'Juvenil ♀' : 'Juvenil ♂';
+
+  if (esFemenino) {
+    if (tLimpio.includes('nostra copa') || tLimpio.includes('copa')) {
+      return 'Copa Valenta ♀';
+    }
+    if (tLimpio.includes('promocion') || tLimpio.includes('liga')) {
+      return 'Promoción Valenta ♀';
+    }
+    return 'Promoción Valenta ♀';
+  }
+
+  return 'Juvenil ♂';
 }
 
 function extraerFechaDeTexto(texto) {
@@ -283,7 +324,7 @@ function normalizarMarcadorPartido(valor) {
   return limpio;
 }
 
-function parsearPartidosDesdeTexto(textoCrudo) {
+function parsearPartidosDesdeTexto(textoCrudo, categoriaForzada = '') {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -380,7 +421,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
       }
 
       resultados.push({
-        categoria: detectarCategoriaImportada(`${linea} ${jornadaActual}`),
+        categoria: detectarCategoriaImportada(`${linea} ${jornadaActual}`, categoriaForzada),
         local,
         visitante,
         fecha: fechaCompleta,
@@ -429,7 +470,7 @@ function parsearPartidosDesdeTexto(textoCrudo) {
     const clubLocal = 'C.D. Rafael Altamira FS';
     const local = esFuera ? rival : clubLocal;
     const visitante = esFuera ? clubLocal : rival;
-    const categoria = detectarCategoriaImportada(`${linea} ${jornadaActual}`);
+    const categoria = detectarCategoriaImportada(`${linea} ${jornadaActual}`, categoriaForzada);
     const fechaBase = fechaEnLinea || fechaActual;
     const fechaCompleta =
       hora && !fechaBase.includes(hora) ? `${fechaBase} · ${hora}` : fechaBase;
@@ -452,13 +493,13 @@ function parsearPartidosDesdeTexto(textoCrudo) {
   return resultados;
 }
 
-function parsearPartidosDesdeHtml(htmlTexto) {
+function parsearPartidosDesdeHtml(htmlTexto, categoriaForzada = '') {
   if (!htmlTexto || typeof DOMParser === 'undefined') return [];
   try {
     const parser = new DOMParser();
     const docHtml = parser.parseFromString(htmlTexto, 'text/html');
     const textoPlano = docHtml.body ? docHtml.body.innerText || docHtml.body.textContent || '' : '';
-    return parsearPartidosDesdeTexto(textoPlano);
+    return parsearPartidosDesdeTexto(textoPlano, categoriaForzada);
   } catch {
     return [];
   }
@@ -566,7 +607,7 @@ function formatearDif(dif) {
   return n > 0 ? `+${n}` : `${n}`;
 }
 
-function parsearClasificacionDesdeTexto(textoCrudo) {
+function parsearClasificacionDesdeTexto(textoCrudo, categoriaForzada = '') {
   const lineas = String(textoCrudo || '')
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -614,6 +655,7 @@ function parsearClasificacionDesdeTexto(textoCrudo) {
       }
 
       equipos.push({
+        categoria: categoriaForzada || '',
         pos: posExplicita || posPendiente || equipos.length + 1,
         equipo: nombreFinal,
         pts,
@@ -724,15 +766,23 @@ function normalizarFechaClave(fechaStr) {
 }
 
 function normalizarClavePartido(partido) {
-  const fecha = normalizarFechaClave(partido.fecha);
+  const cat = normalizarCategoria(partido?.categoria || '');
+  const fecha = normalizarFechaClave(partido?.fecha);
   const equiposOrdenados = [
-    normalizarEquipoClave(partido.local),
-    normalizarEquipoClave(partido.visitante)
+    normalizarEquipoClave(partido?.local),
+    normalizarEquipoClave(partido?.visitante)
   ]
     .filter(Boolean)
     .sort()
     .join('__');
-  return `${fecha}|${equiposOrdenados}`;
+  return `${cat}|${fecha}|${equiposOrdenados}`;
+}
+
+function normalizarClaveClasificacion(item) {
+  const cat = normalizarCategoria(item?.categoria || '');
+  const eq = normalizarNombreEquipoClasificacion(item?.equipo || '');
+  if (!eq) return '';
+  return `${cat}|${eq}`;
 }
 
 function obtenerMarcaTiempoPartido(partido) {
@@ -1006,7 +1056,7 @@ function esStaffPrioritario(perfilItem) {
 function esPerfilFemenino(perfilItem) {
   const cat = String(perfilItem?.categoria || '').trim().toLowerCase();
   const nombre = String(perfilItem?.nombre || '').trim().toLowerCase();
-  if (cat.endsWith('♀') || cat.includes('femenin')) return true;
+  if (cat.endsWith('♀') || cat.includes('femenin') || cat.includes('valenta')) return true;
   if (cat.endsWith('♂') || cat.includes('masculin')) return false;
   if (nombre.includes('femenin')) return true;
   return false;
@@ -1021,6 +1071,8 @@ function normalizarCategoria(cat) {
   return String(cat || '')
     .trim()
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ');
 }
 
@@ -1194,32 +1246,66 @@ function TarjetaMiPerfil({
 
 const DEMO_PARTIDOS = [
   {
-    id: 'demo1',
+    id: 'demo_ben_1',
+    categoria: 'Benjamín ♂',
+    local: 'Salesianos San Antonio Abad \'A\'',
+    visitante: 'C.D. Rafael Altamira Picanya',
+    fecha: '27-11-2026 · 18:00 CET',
+    pabellon: 'Colegio Salesianos San Antonio Abad Pista 2',
+    resultado: 'VS',
+    asistentes: []
+  },
+  {
+    id: 'demo_ale_1',
+    categoria: 'Alevín ♂',
+    local: 'Salesianos San Antonio Abad \'A\'',
+    visitante: 'C.D. Rafael Altamira Picanya \'A\'',
+    fecha: '27-11-2026 · 19:15 CET',
+    pabellon: 'Colegio Salesianos San Antonio Abad Pista 2',
+    resultado: 'VS',
+    asistentes: []
+  },
+  {
+    id: 'demo_juv_1',
     categoria: 'Juvenil ♂',
-    local: 'C.D. Rafael Altamira FS',
-    visitante: 'Picanya Futsal B',
-    fecha: 'Sábado 18:30',
-    pabellon: 'Pabellón Municipal Picanya',
+    local: 'C.F.S. Aliança Quart de Poblet \'A\'',
+    visitante: 'C.D. Rafael Altamira Picanya \'A\'',
+    fecha: '28-11-2026 · 11:00 CET',
+    pabellon: 'Pista Colegio Publico Juan Comenius Pabellon',
     resultado: 'VS',
     asistentes: ['Carlos M.', 'Javier G.', 'Marc N.']
   },
   {
-    id: 'demo2',
-    categoria: 'Juvenil ♂',
-    local: 'Torrent FS',
-    visitante: 'C.D. Rafael Altamira FS',
-    fecha: 'Domingo 11:00',
-    pabellon: 'Pabellón visitante (Torrent FS)',
-    resultado: '3 - 5',
-    asistentes: ['Alejandro R.']
+    id: 'demo_prom_1',
+    categoria: 'Promoción Valenta ♀',
+    local: 'C.D. Rafael Altamira Picanya \'A\'',
+    visitante: 'Maristas Cullera',
+    fecha: '28-11-2026 · 20:30 CET',
+    pabellon: 'Pabellón Mpal. Vicent Martí "Galán" Picanya',
+    resultado: 'VS',
+    asistentes: []
+  },
+  {
+    id: 'demo_copa_1',
+    categoria: 'Copa Valenta ♀',
+    local: 'Santa Ana Algemesí C.D.',
+    visitante: 'C.D. Rafael Altamira Picanya \'A\'',
+    fecha: '24-01-2027 · 13:00 CET',
+    pabellon: 'Pavelló Covert 9 de Octubre Algemesi',
+    resultado: 'VS',
+    asistentes: []
   }
 ];
 
 const DEMO_CLASIFICACION = [
-  { id: 'c1', pos: 1, equipo: 'C.D. Rafael Altamira FS', pts: 25, pj: 10, pg: 8, pe: 1, pp: 1, gf: 42, gc: 18, dif: 24, escudo: '' },
-  { id: 'c2', pos: 2, equipo: 'Torrent FS', pts: 22, pj: 10, pg: 7, pe: 1, pp: 2, gf: 38, gc: 21, dif: 17, escudo: '' },
-  { id: 'c3', pos: 3, equipo: 'Picanya Futsal B', pts: 19, pj: 10, pg: 6, pe: 1, pp: 3, gf: 31, gc: 24, dif: 7, escudo: '' },
-  { id: 'c4', pos: 4, equipo: 'Paiporta FS', pts: 15, pj: 10, pg: 5, pe: 0, pp: 5, gf: 27, gc: 30, dif: -3, escudo: '' }
+  { id: 'c_ben_1', categoria: 'Benjamín ♂', pos: 1, equipo: 'C.D. Juan Comenius', pts: 3, pj: 1, pg: 1, pe: 0, pp: 0, gf: 11, gc: 1, dif: 10, escudo: '' },
+  { id: 'c_ben_5', categoria: 'Benjamín ♂', pos: 5, equipo: 'C.D. Rafael Altamira Picanya', pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 12, dif: -10, escudo: '' },
+  { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: 'S.D. San Pedro Pascual \'A\'', pts: 6, pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, dif: 11, escudo: '' },
+  { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: 'C.D. Rafael Altamira Picanya \'A\'', pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, dif: -7, escudo: '' },
+  { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: 'C.D. Corbera Lambert Logística y Gestión Port. \'A\'', pts: 25, pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, dif: 49, escudo: '' },
+  { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: 'C.D. Rafael Altamira Picanya \'A\'', pts: 0, pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, dif: -26, escudo: '' },
+  { id: 'c_prom_1', categoria: 'Promoción Valenta ♀', pos: 1, equipo: 'C.D. Inter Marjal', pts: 21, pj: 7, pg: 7, pe: 0, pp: 0, gf: 43, gc: 3, dif: 40, escudo: '' },
+  { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: 'C.D. Rafael Altamira Picanya \'A\'', pts: 9, pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, dif: -14, escudo: '' }
 ];
 
 const DEMO_PLANTILLA = [
@@ -1317,6 +1403,7 @@ export default function App() {
     setTab('avisos');
   };
 
+  const [categoriaActiva, setCategoriaActiva] = useState('Todas');
   const [partidosSubtab, setPartidosSubtab] = useState('proximos');
   const [partidoSeleccionadoId, setPartidoSeleccionadoId] = useState(null);
   const [ligaSubtab, setLigaSubtab] = useState('tabla');
@@ -1329,14 +1416,17 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [showImportTablaBox, setShowImportTablaBox] = useState(false);
   const [textoImportarClasificacion, setTextoImportarClasificacion] = useState('');
-  const [urlsSincronizacion] = useState(() => {
-    const guardadas = leerListaLocal('cdra_urls_partidos', URLS_POR_DEFECTO);
-    const lista = Array.isArray(guardadas) && guardadas.length > 0 ? guardadas : URLS_POR_DEFECTO;
-    if (!lista.includes(URLS_POR_DEFECTO[0])) {
-      return [URLS_POR_DEFECTO[0], ...lista];
+  const [fuentesSincronizacion] = useState(() => {
+    const guardadas = leerListaLocal('cdra_fuentes_categorias', FUENTES_CATEGORIAS_CLUB);
+    if (Array.isArray(guardadas) && guardadas.length > 0 && guardadas[0]?.url) {
+      return guardadas;
     }
-    return lista;
+    return FUENTES_CATEGORIAS_CLUB;
   });
+  const urlsSincronizacion = useMemo(
+    () => fuentesSincronizacion.map((f) => f.url).filter(Boolean),
+    [fuentesSincronizacion]
+  );
   const [sincronizandoUrls, setSincronizandoUrls] = useState(false);
   const [escudoCargado, setEscudoCargado] = useState(true);
 
@@ -1561,7 +1651,7 @@ export default function App() {
     setRefrescandoDatos(true);
     try {
       const peticiones = [
-        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(25))),
+        getDocs(query(collection(db, 'partidos'), orderBy('createdAt', 'desc'), limit(60))),
         getDocs(query(collection(db, 'clasificacion'), orderBy('pts', 'desc'), limit(MAX_EQUIPOS_CLASIFICACION))),
         getDocs(query(collection(db, 'plantilla'), orderBy('createdAt', 'asc'), limit(25))),
         getDocs(query(collection(db, 'avisos'), orderBy('createdAt', 'desc'), limit(8)))
@@ -2134,6 +2224,7 @@ export default function App() {
   });
 
   const [nuevoEquipoTabla, setNuevoEquipoTabla] = useState({
+    categoria: 'Juvenil ♂',
     pos: '',
     equipo: '',
     pts: '0',
@@ -2296,9 +2387,13 @@ export default function App() {
           : pabellonCalculado;
 
       const resultadoNormalizado = normalizarMarcadorPartido(cand.resultado || 'VS');
+      const categoriaFinal = detectarCategoriaImportada(
+        cand.categoriaTexto || `${localCrudo} ${visitanteCrudo}`,
+        cand.categoria || ''
+      );
 
       const itemLimpio = {
-        categoria: cand.categoria || detectarCategoriaImportada(cand.categoriaTexto || ''),
+        categoria: categoriaFinal,
         local: localFinal,
         visitante: visitanteFinal,
         fecha: fechaDetectada,
@@ -2330,11 +2425,13 @@ export default function App() {
         const cambioDetectado =
           resultadoFinal !== resultadoAnterior ||
           fechaFinal !== fechaAnterior ||
-          (pabellonFinal && pabellonFinal !== actual?.pabellon);
+          (pabellonFinal && pabellonFinal !== actual?.pabellon) ||
+          (categoriaFinal && categoriaFinal !== actual?.categoria);
 
         if (cambioDetectado) {
           const partidoActualizado = {
             ...actual,
+            categoria: categoriaFinal || actual?.categoria,
             local: localFinal,
             visitante: visitanteFinal,
             fecha: fechaFinal,
@@ -2371,6 +2468,7 @@ export default function App() {
         if (act?.id && !String(act.id).startsWith('demo') && !String(act.id).startsWith('sync_')) {
           tareas.push(
             updateDoc(doc(db, 'partidos', act.id), {
+              categoria: act.categoria,
               local: act.local,
               visitante: act.visitante,
               fecha: act.fecha,
@@ -2422,23 +2520,32 @@ export default function App() {
     };
   };
 
-  const registrarClasificacionSinDuplicar = async (candidatos) => {
-    const clavesExistentes = new Set(
-      clasificacion.map((item) => normalizarNombreEquipoClasificacion(item.equipo))
-    );
-    const nuevos = [];
+  const registrarClasificacionSinDuplicar = async (candidatos, categoriaPorDefecto = '') => {
+    const mapaExistentes = new Map();
+    clasificacion.forEach((item, idx) => {
+      const k = normalizarClaveClasificacion(item);
+      if (k && !mapaExistentes.has(k)) {
+        mapaExistentes.set(k, idx);
+      }
+    });
+
+    let listaTrabajo = [...clasificacion];
+    const nuevosConId = [];
+    const actualizadosFirestore = [];
 
     for (const cand of candidatos) {
-      if (nuevos.length >= MAX_EQUIPOS_CLASIFICACION) break;
+      if (nuevosConId.length >= MAX_EQUIPOS_CLASIFICACION) break;
       const nombreEq = sanearNombreEquipoTabla([String(cand.equipo || '').trim()]);
-      const claveEq = normalizarNombreEquipoClasificacion(nombreEq);
-      if (!nombreEq || !claveEq || clavesExistentes.has(claveEq)) continue;
+      const catEq = cand.categoria || categoriaPorDefecto || 'Juvenil ♂';
+      const itemClave = { categoria: catEq, equipo: nombreEq };
+      const claveEq = normalizarClaveClasificacion(itemClave);
+      if (!nombreEq || !claveEq) continue;
 
-      clavesExistentes.add(claveEq);
       const gf = Number(cand.gf || 0);
       const gc = Number(cand.gc || 0);
-      nuevos.push({
-        pos: Number(cand.pos || clasificacion.length + nuevos.length + 1),
+      const filaNormalizada = {
+        categoria: catEq,
+        pos: Number(cand.pos || listaTrabajo.length + nuevosConId.length + 1),
         equipo: nombreEq,
         pts: Number(cand.pts || 0),
         pj: Number(cand.pj || 0),
@@ -2449,17 +2556,33 @@ export default function App() {
         gc,
         dif: calcularDifClasificacion(gf, gc, cand.dif),
         escudo: cand.escudo || ''
-      });
+      };
+
+      if (mapaExistentes.has(claveEq)) {
+        const idxExist = mapaExistentes.get(claveEq);
+        const actual = listaTrabajo[idxExist];
+        const filaAct = {
+          ...actual,
+          ...filaNormalizada,
+          escudo: filaNormalizada.escudo || actual.escudo || ''
+        };
+        listaTrabajo[idxExist] = filaAct;
+        actualizadosFirestore.push(filaAct);
+        continue;
+      }
+
+      const nuevoDoc = {
+        id: `eq_sync_${Date.now()}_${nuevosConId.length}`,
+        ...filaNormalizada
+      };
+      nuevosConId.push(nuevoDoc);
+      listaTrabajo.push(nuevoDoc);
+      mapaExistentes.set(claveEq, listaTrabajo.length - 1);
     }
 
-    if (nuevos.length === 0) return 0;
+    if (nuevosConId.length === 0 && actualizadosFirestore.length === 0) return 0;
 
-    const nuevosConId = nuevos.map((item, idx) => ({
-      id: `eq_sync_${Date.now()}_${idx}`,
-      ...item
-    }));
-
-    let ordenada = [...clasificacion, ...nuevosConId].sort((a, b) => {
+    let ordenada = [...listaTrabajo].sort((a, b) => {
       const posA = Number(a.pos || 999);
       const posB = Number(b.pos || 999);
       if (posA !== posB) return posA - posB;
@@ -2472,58 +2595,97 @@ export default function App() {
     guardarClasificacionLocal(ordenada);
 
     if (firebaseOk) {
-      const resultadosAltas = await Promise.allSettled(
-        nuevos.map((item) => addDoc(collection(db, 'clasificacion'), item))
-      );
+      const tareas = [];
 
-      let huboIdReal = false;
-      ordenada = ordenada.map((c) => {
-        const idx = nuevosConId.findIndex((n) => n.id === c.id);
-        if (idx !== -1 && resultadosAltas[idx]?.status === 'fulfilled') {
-          huboIdReal = true;
-          return { ...c, id: resultadosAltas[idx].value.id };
+      for (const act of actualizadosFirestore) {
+        if (act?.id && !/^c_?[a-z]*_?\d+$/i.test(act.id) && !String(act.id).startsWith('eq_sync_')) {
+          tareas.push(
+            updateDoc(doc(db, 'clasificacion', act.id), {
+              categoria: act.categoria,
+              pos: act.pos,
+              equipo: act.equipo,
+              pts: act.pts,
+              pj: act.pj,
+              pg: act.pg,
+              pe: act.pe,
+              pp: act.pp,
+              gf: act.gf,
+              gc: act.gc,
+              dif: act.dif
+            }).catch(() => {})
+          );
         }
-        return c;
-      });
+      }
 
-      if (huboIdReal) {
-        guardarClasificacionLocal(ordenada);
+      const startIdxNuevos = tareas.length;
+      for (const nuevo of nuevosConId) {
+        const { id: _idTmp, ...datosSinId } = nuevo;
+        tareas.push(addDoc(collection(db, 'clasificacion'), datosSinId));
+      }
+
+      if (tareas.length > 0) {
+        const settled = await Promise.allSettled(tareas);
+        let huboIdReal = false;
+        const mapaIds = new Map();
+        nuevosConId.forEach((n, i) => {
+          const r = settled[startIdxNuevos + i];
+          if (r?.status === 'fulfilled' && r.value?.id) {
+            mapaIds.set(n.id, r.value.id);
+            huboIdReal = true;
+          }
+        });
+        if (huboIdReal) {
+          ordenada = ordenada.map((c) => (mapaIds.has(c.id) ? { ...c, id: mapaIds.get(c.id) } : c));
+          guardarClasificacionLocal(ordenada);
+        }
       }
     }
 
-    return nuevos.length;
+    return nuevosConId.length + actualizadosFirestore.length;
   };
 
   const handleImportarClasificacionTexto = async (e) => {
     e.preventDefault();
-    const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion);
+    const catDestino = categoriaActiva !== 'Todas' ? categoriaActiva : 'Juvenil ♂';
+    const parseados = parsearClasificacionDesdeTexto(textoImportarClasificacion, catDestino);
     if (parseados.length === 0) {
       alert('No se detectaron filas de clasificación válidas en el texto pegado.');
       return;
     }
 
-    const añadidos = await registrarClasificacionSinDuplicar(parseados);
-    if (añadidos === 0) {
-      alert('Esos equipos ya estaban en la clasificación (0 duplicados).');
+    const procesados = await registrarClasificacionSinDuplicar(parseados, catDestino);
+    if (procesados === 0) {
+      alert('Esos equipos ya estaban en la clasificación de esa categoría.');
       return;
     }
 
     setTextoImportarClasificacion('');
     setShowImportTablaBox(false);
-    alert(`¡Se importaron ${añadidos} equipo(s) a la clasificación sin duplicados!`);
+    alert(`¡Clasificación sincronizada (${procesados} fila(s)) en ${catDestino}!`);
   };
 
   const handleLimpiarTablaCompleta = async () => {
     if (!isAdmin) return;
-    if (!window.confirm('¿Vaciar toda la tabla de clasificación para volver a importarla limpia?')) {
+    const msg =
+      categoriaActiva !== 'Todas'
+        ? `¿Vaciar la tabla de clasificación de ${categoriaActiva}?`
+        : '¿Vaciar toda la tabla de clasificación para volver a importarla limpia?';
+    if (!window.confirm(msg)) {
       return;
     }
-    const anteriores = [...clasificacion];
-    guardarClasificacionLocal([]);
+
+    const coincideCategoria = (item) =>
+      categoriaActiva === 'Todas' ||
+      normalizarCategoria(item.categoria) === normalizarCategoria(categoriaActiva);
+
+    const borrados = clasificacion.filter(coincideCategoria);
+    const restantes = clasificacion.filter((item) => !coincideCategoria(item));
+    guardarClasificacionLocal(restantes);
+
     if (firebaseOk) {
       await Promise.allSettled(
-        anteriores
-          .filter((item) => !/^c\d+$/.test(item.id))
+        borrados
+          .filter((item) => !/^c_?[a-z]*_?\d+$/i.test(item.id))
           .map((item) => deleteDoc(doc(db, 'clasificacion', item.id)))
       );
     }
@@ -2537,7 +2699,7 @@ export default function App() {
         c.id === equipoItem.id ? { ...c, escudo: dataUrl } : c
       );
       guardarClasificacionLocal(actualizada);
-      if (firebaseOk && !/^c\d+$/.test(equipoItem.id)) {
+      if (firebaseOk && !/^c_?[a-z]*_?\d+$/i.test(equipoItem.id)) {
         try {
           await updateDoc(doc(db, 'clasificacion', equipoItem.id), { escudo: dataUrl });
         } catch {
@@ -2585,7 +2747,7 @@ export default function App() {
     if (firebaseOk && aBorrar.length > 0) {
       await Promise.allSettled(
         aBorrar
-          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id))
+          .filter((item) => !/^(demo|c|p|a|m)\d+$/.test(item.id) && !String(item.id).startsWith('demo_'))
           .map((item) => deleteDoc(doc(db, 'partidos', item.id)))
       );
     }
@@ -2605,12 +2767,15 @@ export default function App() {
       let huboRespuestaEndpoint = false;
       let motivosError = [];
 
-      if (urlsSincronizacion.length > 0) {
+      if (fuentesSincronizacion.length > 0) {
         try {
           const resp = await fetch('/api/sincronizar-partidos', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls: urlsSincronizacion })
+            body: JSON.stringify({
+              urls: urlsSincronizacion,
+              fuentes: fuentesSincronizacion
+            })
           });
           if (resp.ok) {
             const data = await resp.json();
@@ -2628,14 +2793,14 @@ export default function App() {
         }
 
         if (!huboRespuestaEndpoint || partidosDetectados.length === 0) {
-          for (const urlObjetivo of urlsSincronizacion) {
+          for (const fuente of fuentesSincronizacion) {
             try {
-              const r = await fetch(urlObjetivo);
+              const r = await fetch(fuente.url);
               if (!r.ok) continue;
               const cuerpo = await r.text();
               const extraidos = cuerpo.trim().startsWith('<')
-                ? parsearPartidosDesdeHtml(cuerpo)
-                : parsearPartidosDesdeTexto(cuerpo);
+                ? parsearPartidosDesdeHtml(cuerpo, fuente.categoria)
+                : parsearPartidosDesdeTexto(cuerpo, fuente.categoria);
               if (extraidos.length > 0) {
                 partidosDetectados = [...partidosDetectados, ...extraidos];
               }
@@ -2689,8 +2854,11 @@ export default function App() {
   const handleAddPartido = async (e) => {
     e.preventDefault();
     if (!nuevoPartido.visitante) return;
+    const catSeleccionada =
+      categoriaActiva !== 'Todas' ? categoriaActiva : (nuevoPartido.categoria || 'Juvenil ♂');
     const item = {
       ...nuevoPartido,
+      categoria: catSeleccionada,
       resultado: normalizarMarcadorPartido(nuevoPartido.resultado),
       asistentes: [],
       createdAt: serverTimestamp()
@@ -2700,7 +2868,7 @@ export default function App() {
     guardarPartidosLocal(actualizada);
     setShowForm(false);
     setNuevoPartido({
-      categoria: 'Juvenil ♂',
+      categoria: catSeleccionada,
       local: 'C.D. Rafael Altamira FS',
       visitante: '',
       fecha: '',
@@ -2722,7 +2890,10 @@ export default function App() {
     if (!nuevoEquipoTabla.equipo) return;
     const gf = Number(nuevoEquipoTabla.gf || 0);
     const gc = Number(nuevoEquipoTabla.gc || 0);
+    const catTabla =
+      categoriaActiva !== 'Todas' ? categoriaActiva : (nuevoEquipoTabla.categoria || 'Juvenil ♂');
     const item = {
+      categoria: catTabla,
       pos: Number(nuevoEquipoTabla.pos || clasificacion.length + 1),
       equipo: sanearNombreEquipoTabla([nuevoEquipoTabla.equipo]),
       pts: Number(nuevoEquipoTabla.pts || 0),
@@ -2739,7 +2910,7 @@ export default function App() {
     const actualizada = [...clasificacion, { id: idTemporal, ...item }].sort((a, b) => Number(a.pos || 999) - Number(b.pos || 999));
     guardarClasificacionLocal(actualizada);
     setShowForm(false);
-    setNuevoEquipoTabla({ pos: '', equipo: '', pts: '0', pj: '0', pg: '0', pe: '0', pp: '0', gf: '0', gc: '0' });
+    setNuevoEquipoTabla({ categoria: catTabla, pos: '', equipo: '', pts: '0', pj: '0', pg: '0', pe: '0', pp: '0', gf: '0', gc: '0' });
     if (firebaseOk) {
       try {
         const ref = await addDoc(collection(db, 'clasificacion'), item);
@@ -2917,7 +3088,7 @@ export default function App() {
       );
     }
 
-    if (firebaseOk && !/^(demo|c|p|a|m)\d+$/.test(id)) {
+    if (firebaseOk && !/^(demo|c|p|a|m)\d+$/.test(id) && !String(id).startsWith('demo_')) {
       try {
         await deleteDoc(doc(db, col, id));
       } catch {
@@ -2926,9 +3097,40 @@ export default function App() {
     }
   };
 
+  const categoriasDisponibles = useMemo(() => {
+    const base = fuentesSincronizacion.map((f) => f.categoria).filter(Boolean);
+    const extras = [
+      ...partidos.map((p) => p.categoria),
+      ...clasificacion.map((c) => c.categoria)
+    ].filter(Boolean);
+
+    const vistas = new Set();
+    const lista = [];
+    for (const cat of [...base, ...extras]) {
+      const norm = normalizarCategoria(cat);
+      if (norm && !vistas.has(norm)) {
+        vistas.add(norm);
+        lista.push(cat);
+      }
+    }
+    return ['Todas', ...lista];
+  }, [fuentesSincronizacion, partidos, clasificacion]);
+
+  const partidosFiltradosPorCategoria = useMemo(() => {
+    if (categoriaActiva === 'Todas') return partidos;
+    const catNorm = normalizarCategoria(categoriaActiva);
+    return partidos.filter((p) => normalizarCategoria(p.categoria) === catNorm);
+  }, [partidos, categoriaActiva]);
+
+  const clasificacionFiltrada = useMemo(() => {
+    if (categoriaActiva === 'Todas') return clasificacion;
+    const catNorm = normalizarCategoria(categoriaActiva);
+    return clasificacion.filter((c) => normalizarCategoria(c.categoria) === catNorm);
+  }, [clasificacion, categoriaActiva]);
+
   const { proximos: partidosProximos, jugados: partidosJugados } = useMemo(
-    () => separarPartidosProximosYJugados(partidos),
-    [partidos]
+    () => separarPartidosProximosYJugados(partidosFiltradosPorCategoria),
+    [partidosFiltradosPorCategoria]
   );
 
   const partidoModal = useMemo(
@@ -3058,6 +3260,34 @@ export default function App() {
       urlMaps
     };
   };
+
+  const renderSelectorCategorias = () => (
+    <div
+      style={{
+        display: 'flex',
+        gap: 6,
+        overflowX: 'auto',
+        paddingBottom: 6,
+        marginBottom: 10,
+        scrollbarWidth: 'thin'
+      }}
+    >
+      {categoriasDisponibles.map((cat) => {
+        const activa = normalizarCategoria(categoriaActiva) === normalizarCategoria(cat);
+        return (
+          <button
+            key={cat}
+            type="button"
+            className={`subtab ${activa ? 'active' : ''}`}
+            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+            onClick={() => setCategoriaActiva(cat)}
+          >
+            <TextoConSignoGenero texto={cat} />
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const renderTarjetaPartidoCompacta = (p, yaJugado = false) => {
     const {
@@ -3820,6 +4050,8 @@ export default function App() {
               </div>
             </div>
 
+            {renderSelectorCategorias()}
+
             <div className="subtabs">
               <button
                 type="button"
@@ -3840,7 +4072,7 @@ export default function App() {
             {isAdmin && showForm && (
               <form className="form-box" onSubmit={handleAddPartido}>
                 <SelectorCategoriaYGenero
-                  valorActual={nuevoPartido.categoria}
+                  valorActual={categoriaActiva !== 'Todas' ? categoriaActiva : nuevoPartido.categoria}
                   onChangeValor={(val) => setNuevoPartido({ ...nuevoPartido, categoria: val })}
                 />
                 <input placeholder="Local" value={nuevoPartido.local} onChange={(e) => setNuevoPartido({ ...nuevoPartido, local: e.target.value })} />
@@ -3856,7 +4088,7 @@ export default function App() {
               <div>
                 {partidosProximos.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                    No hay partidos por jugar programados por ahora.
+                    No hay partidos por jugar en {categoriaActiva === 'Todas' ? 'el club' : categoriaActiva} por ahora.
                   </div>
                 ) : (
                   partidosProximos.map((p) => renderTarjetaPartidoCompacta(p, false))
@@ -3868,7 +4100,7 @@ export default function App() {
               <div>
                 {partidosJugados.length === 0 ? (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                    Aún no hay partidos jugados registrados.
+                    Aún no hay partidos jugados en {categoriaActiva === 'Todas' ? 'el club' : categoriaActiva}.
                   </div>
                 ) : (
                   partidosJugados.map((p) => renderTarjetaPartidoCompacta(p, true))
@@ -3915,6 +4147,8 @@ export default function App() {
               )}
             </div>
 
+            {ligaSubtab === 'tabla' && renderSelectorCategorias()}
+
             <div className="subtabs">
               <button className={`subtab ${ligaSubtab === 'tabla' ? 'active' : ''}`} onClick={() => setLigaSubtab('tabla')}>
                 Tabla de Liga
@@ -3929,7 +4163,7 @@ export default function App() {
                 {isAdmin && showImportTablaBox && (
                   <form className="form-box" onSubmit={handleImportarClasificacionTexto}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
-                      Importar clasificación completa (sin duplicados)
+                      Importar clasificación ({categoriaActiva === 'Todas' ? 'Juvenil ♂' : categoriaActiva})
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
                       Pega aquí las filas con columnas (# Equipo Pts PJ PG PE PP GF GC Dif) o el texto de clasificación:
@@ -4004,7 +4238,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {clasificacion.map((c, idx) => {
+                      {clasificacionFiltrada.map((c, idx) => {
                         const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
                         const gf = Number(c.gf || 0);
                         const gc = Number(c.gc || 0);
