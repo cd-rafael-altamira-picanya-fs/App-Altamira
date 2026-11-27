@@ -134,7 +134,10 @@ function guardarLocalSeguro(clave, valor) {
 function leerListaLocal(clave, respaldo) {
   try {
     const saved = localStorage.getItem(clave);
-    if (saved !== null) return JSON.parse(saved);
+    if (saved !== null) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
   } catch {
     // Ignorar error de lectura local
   }
@@ -257,24 +260,6 @@ function detectarCategoriaImportada(texto, categoriaForzada = '') {
     tLimpio.includes('maguen alfafar')
   ) {
     return 'Promoción Valenta ♀';
-  }
-
-  if (
-    tLimpio.includes('alzira') ||
-    tLimpio.includes('font de la figuera') ||
-    tLimpio.includes('corbera') ||
-    tLimpio.includes('senabre') ||
-    tLimpio.includes('picassent') ||
-    tLimpio.includes('futsacar') ||
-    tLimpio.includes('inter montesa') ||
-    tLimpio.includes('alameda') ||
-    tLimpio.includes('alaquas') ||
-    tLimpio.includes('hispanic fuensanta') ||
-    tLimpio.includes('sueca') ||
-    tLimpio.includes('massanassa') ||
-    tLimpio.includes('inmaculada corazon')
-  ) {
-    return 'Juvenil ♂';
   }
 
   return 'Juvenil ♂';
@@ -845,80 +830,6 @@ function obtenerMarcaTiempoPartido(partido) {
     if (!Number.isNaN(d.getTime())) return d.getTime();
   }
 
-  const fechaCortaMatch = textoCompleto.match(/\b(\d{1,2})[/-](\d{1,2})\b/);
-  if (fechaCortaMatch) {
-    const dia = Number(fechaCortaMatch[1]);
-    const mes = Number(fechaCortaMatch[2]) - 1;
-    const ahora = new Date();
-    let anio = ahora.getFullYear();
-    const candidata = new Date(anio, mes, dia, horas, minutos, 0);
-    if (candidata.getTime() < ahora.getTime() - 90 * 24 * 60 * 60 * 1000) {
-      anio += 1;
-    }
-    const d = new Date(anio, mes, dia, horas, minutos, 0);
-    if (!Number.isNaN(d.getTime())) return d.getTime();
-  }
-
-  const limpio = textoCompleto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-  const partes = limpio.split(/[\s,·()]+/);
-  let diaMes = null;
-  let mesIdx = null;
-
-  for (let i = 0; i < partes.length; i++) {
-    const p = partes[i];
-    if (/^\d{1,2}$/.test(p) && Number(p) >= 1 && Number(p) <= 31 && diaMes === null) {
-      diaMes = Number(p);
-    }
-    if (meses[p] !== undefined && mesIdx === null) {
-      mesIdx = meses[p];
-    }
-  }
-
-  if (diaMes !== null && mesIdx !== null) {
-    const ahora = new Date();
-    let anio = ahora.getFullYear();
-    const candidata = new Date(anio, mesIdx, diaMes, horas, minutos, 0);
-    if (candidata.getTime() < ahora.getTime() - 90 * 24 * 60 * 60 * 1000) {
-      anio += 1;
-    }
-    const finalDate = new Date(anio, mesIdx, diaMes, horas, minutos, 0);
-    if (!Number.isNaN(finalDate.getTime())) return finalDate.getTime();
-  }
-
-  const diasSemana = {
-    domingo: 0, dom: 0,
-    lunes: 1, lun: 1,
-    martes: 2, mar: 2,
-    miercoles: 3, mie: 3,
-    jueves: 4, jue: 4,
-    viernes: 5, vie: 5,
-    sabado: 6, sab: 6
-  };
-
-  for (const p of partes) {
-    if (diasSemana[p] !== undefined) {
-      const ahora = new Date();
-      const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
-      const diffDias = (diasSemana[p] - inicioHoy.getDay() + 7) % 7;
-      const candidata = new Date(
-        inicioHoy.getFullYear(),
-        inicioHoy.getMonth(),
-        inicioHoy.getDate() + diffDias,
-        horas,
-        minutos,
-        0
-      );
-      if (candidata.getTime() < ahora.getTime()) {
-        candidata.setDate(candidata.getDate() + 7);
-      }
-      return candidata.getTime();
-    }
-  }
-
   return Number.MAX_SAFE_INTEGER;
 }
 
@@ -1278,7 +1189,7 @@ const DEMO_PARTIDOS = [
     id: 'demo_ben_hoy_27',
     categoria: 'Benjamín ♂',
     local: 'C.D. Rafael Altamira Picanya',
-    visitante: 'Salesianos San Antonio Abad \'A\'',
+    visitante: "Salesianos San Antonio Abad 'A'",
     fecha: '27-11-2026 · 18:00 CET',
     pabellon: 'Pabellón Municipal Picanya',
     resultado: 'VS',
@@ -1287,8 +1198,8 @@ const DEMO_PARTIDOS = [
   {
     id: 'demo_ale_hoy_27',
     categoria: 'Alevín ♂',
-    local: 'Salesianos San Antonio Abad \'A\'',
-    visitante: 'C.D. Rafael Altamira Picanya \'A\'',
+    local: "Salesianos San Antonio Abad 'A'",
+    visitante: "C.D. Rafael Altamira Picanya 'A'",
     fecha: '27-11-2026 · 19:15 CET',
     pabellon: 'Colegio Salesianos San Antonio Abad Pista 2',
     resultado: 'VS',
@@ -1297,8 +1208,8 @@ const DEMO_PARTIDOS = [
   {
     id: 'demo_juv_1',
     categoria: 'Juvenil ♂',
-    local: 'C.F.S. Aliança Quart de Poblet \'A\'',
-    visitante: 'C.D. Rafael Altamira Picanya \'A\'',
+    local: "C.F.S. Aliança Quart de Poblet 'A'",
+    visitante: "C.D. Rafael Altamira Picanya 'A'",
     fecha: '28-11-2026 · 11:00 CET',
     pabellon: 'Pista Colegio Publico Juan Comenius Pabellon',
     resultado: 'VS',
@@ -1307,7 +1218,7 @@ const DEMO_PARTIDOS = [
   {
     id: 'demo_prom_1',
     categoria: 'Promoción Valenta ♀',
-    local: 'C.D. Rafael Altamira Picanya \'A\'',
+    local: "C.D. Rafael Altamira Picanya 'A'",
     visitante: 'Maristas Cullera',
     fecha: '28-11-2026 · 20:30 CET',
     pabellon: 'Pabellón Mpal. Vicent Martí "Galán" Picanya',
@@ -1318,7 +1229,7 @@ const DEMO_PARTIDOS = [
     id: 'demo_copa_1',
     categoria: 'Copa Valenta ♀',
     local: 'Santa Ana Algemesí C.D.',
-    visitante: 'C.D. Rafael Altamira Picanya \'A\'',
+    visitante: "C.D. Rafael Altamira Picanya 'A'",
     fecha: '24-01-2027 · 13:00 CET',
     pabellon: 'Pavelló Covert 9 de Octubre Algemesi',
     resultado: 'VS',
@@ -1329,12 +1240,12 @@ const DEMO_PARTIDOS = [
 const DEMO_CLASIFICACION = [
   { id: 'c_ben_1', categoria: 'Benjamín ♂', pos: 1, equipo: 'C.D. Juan Comenius', pts: 3, pj: 1, pg: 1, pe: 0, pp: 0, gf: 11, gc: 1, dif: 10, escudo: '' },
   { id: 'c_ben_5', categoria: 'Benjamín ♂', pos: 5, equipo: 'C.D. Rafael Altamira Picanya', pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 12, dif: -10, escudo: '' },
-  { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: 'S.D. San Pedro Pascual \'A\'', pts: 6, pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, dif: 11, escudo: '' },
-  { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: 'C.D. Rafael Altamira Picanya \'A\'', pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, dif: -7, escudo: '' },
-  { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: 'C.D. Corbera Lambert Logística y Gestión Port. \'A\'', pts: 25, pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, dif: 49, escudo: '' },
-  { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: 'C.D. Rafael Altamira Picanya \'A\'', pts: 0, pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, dif: -26, escudo: '' },
+  { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: "S.D. San Pedro Pascual 'A'", pts: 6, pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, dif: 11, escudo: '' },
+  { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: "C.D. Rafael Altamira Picanya 'A'", pts: 0, pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, dif: -7, escudo: '' },
+  { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: "C.D. Corbera Lambert Logística y Gestión Port. 'A'", pts: 25, pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, dif: 49, escudo: '' },
+  { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: "C.D. Rafael Altamira Picanya 'A'", pts: 0, pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, dif: -26, escudo: '' },
   { id: 'c_prom_1', categoria: 'Promoción Valenta ♀', pos: 1, equipo: 'C.D. Inter Marjal', pts: 21, pj: 7, pg: 7, pe: 0, pp: 0, gf: 43, gc: 3, dif: 40, escudo: '' },
-  { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: 'C.D. Rafael Altamira Picanya \'A\'', pts: 9, pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, dif: -14, escudo: '' }
+  { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: "C.D. Rafael Altamira Picanya 'A'", pts: 9, pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, dif: -14, escudo: '' }
 ];
 
 const DEMO_PLANTILLA = [
@@ -2783,7 +2694,8 @@ export default function App() {
       }
     }
 
-    guardarPartidosLocal(partidosLimpios);
+    const listaFinal = partidosLimpios.length > 0 ? partidosLimpios : DEMO_PARTIDOS;
+    guardarPartidosLocal(listaFinal);
 
     const aBorrar = [...descartadosPorFechaORival, ...duplicadosEliminados];
     if (firebaseOk && aBorrar.length > 0) {
@@ -2795,7 +2707,7 @@ export default function App() {
     }
 
     return {
-      partidosLimpios,
+      partidosLimpios: listaFinal,
       eliminadosFechas: descartadosPorFechaORival.length,
       eliminadosDuplicados: duplicadosEliminados.length
     };
@@ -2870,7 +2782,9 @@ export default function App() {
       const basePartidos =
         Array.isArray(partidosCargados) && partidosCargados.length > 0
           ? partidosCargados
-          : partidos;
+          : partidos.length > 0
+          ? partidos
+          : DEMO_PARTIDOS;
 
       const baseCorregida = basePartidos.map((p) => {
         const catPartido = String(p?.categoria || '');
@@ -3184,7 +3098,8 @@ export default function App() {
 
   const partidosFiltradosPorCategoria = useMemo(() => {
     const catNorm = normalizarCategoria(categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0]);
-    return partidos.filter((p) => {
+    const fuentePartidos = partidos.length > 0 ? partidos : DEMO_PARTIDOS;
+    return fuentePartidos.filter((p) => {
       const catPartido = normalizarCategoria(p.categoria);
       if (catPartido === catNorm) return true;
       if (!catPartido || catPartido.startsWith('senior')) {
