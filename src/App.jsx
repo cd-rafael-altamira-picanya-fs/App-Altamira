@@ -199,7 +199,10 @@ function esTextoFechaOJornada(texto) {
   const low = t.toLowerCase();
   const tieneMes = /\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic)\b/.test(low);
   const tieneDiaSemana = /\b(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b/.test(low);
-  if ((tieneMes || tieneDiaSemana) && !/\b(c\.?d\.?|c\.?f\.?s?\.?|f\.?s\.?|futsal|club|sport|atletico|atlético|union|unión|valencia|picanya|torrent|maristas|salesianos)\b/i.test(low)) {
+  if (
+    (tieneMes || tieneDiaSemana) &&
+    !/\b(c\.?d\.?|c\.?f\.?s?\.?|f\.?s\.?|futsal|club|sport|atletico|atlético|union|unión|valencia|picanya|torrent|maristas|salesianos)\b/i.test(low)
+  ) {
     return true;
   }
   return false;
@@ -531,7 +534,10 @@ function esLineaCabeceraOEscudo(linea) {
   if (!t) return true;
   if (/^escudo\s+de\b/i.test(t)) return true;
   if (/^#?\s*equipo\s+(pts|pj)\b/i.test(t)) return true;
-  if (/^(pts|pj|pg|pe|pp|gf|gc|dif|forma|g|e|p)\b/i.test(t) && !/[a-z]{4,}/i.test(t.replace(/\b(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/gi, ''))) {
+  if (
+    /^(pts|pj|pg|pe|pp|gf|gc|dif|forma|g|e|p)\b/i.test(t) &&
+    !/[a-z]{4,}/i.test(t.replace(/\b(pts|pj|pg|pe|pp|gf|gc|dif|forma)\b/gi, ''))
+  ) {
     return true;
   }
   return false;
@@ -590,7 +596,7 @@ function sanearNombreEquipoTabla(entrada) {
       const candidata = limpio.slice(0, len).trim();
       if (!candidata) continue;
       const escaped = candidata.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regexRepetido = new RegExp(`^${escaped}\s+${escaped}(?:\s+${escaped})*$`, 'i');
+      const regexRepetido = new RegExp(`^${escaped}\\s+${escaped}(?:\\s+${escaped})*$`, 'i');
       if (regexRepetido.test(limpio)) {
         limpio = candidata;
         break;
@@ -1235,7 +1241,10 @@ const DEMO_CLASIFICACION = [
   { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: "S.D. San Pedro Pascual 'A'", pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, pts: 6, dif: 11, escudo: '' },
   { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, pts: 0, dif: -7, escudo: '' },
   { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: "C.D. Corbera Lambert Logística y Gestión Port. 'A'", pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, pts: 25, dif: 49, escudo: '' },
+  { id: 'c_juv_2', categoria: 'Juvenil ♂', pos: 2, equipo: "C.F.S. Aliança Quart de Poblet 'A'", pj: 9, pg: 7, pe: 1, pp: 1, gf: 45, gc: 16, pts: 22, dif: 29, escudo: '' },
   { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, pts: 0, dif: -26, escudo: '' },
+  { id: 'c_copa_1', categoria: 'Copa Valenta ♀', pos: 1, equipo: 'Santa Ana Algemesí C.D.', pj: 2, pg: 2, pe: 0, pp: 0, gf: 12, gc: 3, pts: 6, dif: 9, escudo: '' },
+  { id: 'c_copa_2', categoria: 'Copa Valenta ♀', pos: 2, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 2, pg: 1, pe: 0, pp: 1, gf: 7, gc: 6, pts: 3, dif: 1, escudo: '' },
   { id: 'c_prom_1', categoria: 'Promoción Valenta ♀', pos: 1, equipo: 'C.D. Inter Marjal', pj: 7, pg: 7, pe: 0, pp: 0, gf: 43, gc: 3, pts: 21, dif: 40, escudo: '' },
   { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, pts: 9, dif: -14, escudo: '' }
 ];
@@ -2997,18 +3006,23 @@ export default function App() {
 
   const clasificacionFiltrada = useMemo(() => {
     const catNorm = normalizarCategoria(categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0]);
-    const fuenteClasif = clasificacion.length > 0 ? clasificacion : DEMO_CLASIFICACION;
-    return fuenteClasif
-      .filter((c) => normalizarCategoria(c.categoria) === catNorm)
-      .sort((a, b) => {
-        if (Number(b.pts || 0) !== Number(a.pts || 0)) {
-          return Number(b.pts || 0) - Number(a.pts || 0);
-        }
-        const difA = calcularDifClasificacion(a.gf, a.gc, a.dif);
-        const difB = calcularDifClasificacion(b.gf, b.gc, b.dif);
-        if (difB !== difA) return difB - difA;
-        return Number(b.gf || 0) - Number(a.gf || 0);
-      });
+    const filtradas = clasificacion.filter(
+      (c) => normalizarCategoria(c.categoria) === catNorm
+    );
+    const fuenteClasif =
+      filtradas.length > 0
+        ? filtradas
+        : DEMO_CLASIFICACION.filter((c) => normalizarCategoria(c.categoria) === catNorm);
+
+    return [...fuenteClasif].sort((a, b) => {
+      if (Number(b.pts || 0) !== Number(a.pts || 0)) {
+        return Number(b.pts || 0) - Number(a.pts || 0);
+      }
+      const difA = calcularDifClasificacion(a.gf, a.gc, a.dif);
+      const difB = calcularDifClasificacion(b.gf, b.gc, b.dif);
+      if (difB !== difA) return difB - difA;
+      return Number(b.gf || 0) - Number(a.gf || 0);
+    });
   }, [clasificacion, categoriaActiva]);
 
   const { proximos: partidosProximos, jugados: partidosJugados } = useMemo(
