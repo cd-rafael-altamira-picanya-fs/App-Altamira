@@ -2538,6 +2538,7 @@ export default function App() {
     });
 
     guardarClasificacionLocal(ordenada);
+    guardarLocalSeguro('cdra_last_sync_at', String(Date.now()));
 
     if (firebaseOk) {
       const tareas = [];
@@ -2969,7 +2970,9 @@ export default function App() {
       if (partidoSeleccionadoId === id) setPartidoSeleccionadoId(null);
       guardarPartidosLocal(partidos.filter((x) => x.id !== id));
     } else if (col === 'clasificacion') {
-      guardarClasificacionLocal(clasificacion.filter((x) => x.id !== id));
+      const nuevaClasif = clasificacion.filter((x) => x.id !== id);
+      guardarClasificacionLocal(nuevaClasif);
+      guardarLocalSeguro('cdra_last_sync_at', String(Date.now()));
     } else if (col === 'plantilla') {
       guardarPlantillaLocal(plantilla.filter((x) => x.id !== id));
     } else if (col === 'avisos') {
@@ -2984,12 +2987,52 @@ export default function App() {
       );
     }
 
-    if (firebaseOk && !/^(demo|c|p|a|m)\d+$/.test(id) && !String(id).startsWith('demo_')) {
+    if (
+      firebaseOk &&
+      id &&
+      !/^(demo|c|p|a|m)\d+$/.test(String(id)) &&
+      !String(id).startsWith('demo_') &&
+      !String(id).startsWith('eq_sync_')
+    ) {
       try {
-        await deleteDoc(doc(db, col, id));
+        await deleteDoc(doc(db, col, String(id)));
       } catch {
-        // Eliminado localmente aunque el documento no existiera en Firebase
+        // Eliminado localmente
       }
+    }
+  };
+
+  const handleVaciarCategoriaClasificacion = async () => {
+    const catDestino = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
+    const catNorm = normalizarCategoria(catDestino);
+    const filasDeCategoria = clasificacion.filter(
+      (c) => normalizarCategoria(c.categoria) === catNorm
+    );
+
+    if (filasDeCategoria.length === 0) return;
+
+    const confirmacion = window.confirm(
+      `¿Borrar los ${filasDeCategoria.length} equipo(s) actuales de ${catDestino}?`
+    );
+    if (!confirmacion) return;
+
+    const restantes = clasificacion.filter(
+      (c) => normalizarCategoria(c.categoria) !== catNorm
+    );
+    guardarClasificacionLocal(restantes);
+    guardarLocalSeguro('cdra_last_sync_at', String(Date.now()));
+
+    if (firebaseOk) {
+      await Promise.allSettled(
+        filasDeCategoria
+          .filter(
+            (item) =>
+              item?.id &&
+              !/^c_?[a-z]*_?\d+$/i.test(String(item.id)) &&
+              !String(item.id).startsWith('eq_sync_')
+          )
+          .map((item) => deleteDoc(doc(db, 'clasificacion', String(item.id))))
+      );
     }
   };
 
@@ -3869,6 +3912,17 @@ export default function App() {
               <h2 className="section-title"><Trophy size={19} /> Clasificación y Goles</h2>
               {ligaSubtab === 'tabla' && (
                 <div className="section-header-actions">
+                  {isAdmin && clasificacionFiltrada.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={handleVaciarCategoriaClasificacion}
+                      title="Borrar los equipos actuales de esta categoría"
+                    >
+                      <Trash2 size={14} />
+                      Vaciar
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-rsvp"
