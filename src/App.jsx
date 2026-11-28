@@ -34,7 +34,8 @@ import {
   Phone,
   RefreshCw,
   ExternalLink,
-  Pencil
+  Pencil,
+  ClipboardPaste
 } from 'lucide-react';
 
 const NOMBRE_CLUB_APP = 'C.D. Rafael Altamira Picanya';
@@ -131,7 +132,7 @@ function leerListaLocal(clave, respaldo) {
     const saved = localStorage.getItem(clave);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {
     // Ignorar error de lectura local
@@ -622,6 +623,7 @@ function formatearDif(dif) {
 
 function parsearClasificacionDesdeTexto(textoCrudo, categoriaForzada = '') {
   const lineas = String(textoCrudo || '')
+    .replace(/\s*\|\s*/g, '\t')
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
@@ -1232,22 +1234,7 @@ const DEMO_PARTIDOS = [
   }
 ];
 
-const DEMO_CLASIFICACION = [
-  { id: 'c_ben_1', categoria: 'Benjamín ♂', pos: 1, equipo: 'C.D. Juan Comenius', pj: 1, pg: 1, pe: 0, pp: 0, gf: 11, gc: 1, pts: 3, dif: 10, escudo: '' },
-  { id: 'c_ben_2', categoria: 'Benjamín ♂', pos: 2, equipo: 'EDELWEISS SCHOOL', pj: 1, pg: 1, pe: 0, pp: 0, gf: 6, gc: 4, pts: 3, dif: 2, escudo: '' },
-  { id: 'c_ben_3', categoria: 'Benjamín ♂', pos: 3, equipo: 'S.D. San Pedro Pascual', pj: 2, pg: 1, pe: 0, pp: 1, gf: 13, gc: 13, pts: 3, dif: 0, escudo: '' },
-  { id: 'c_ben_4', categoria: 'Benjamín ♂', pos: 4, equipo: 'C.E. La Anunciación', pj: 1, pg: 0, pe: 0, pp: 1, gf: 4, gc: 6, pts: 0, dif: -2, escudo: '' },
-  { id: 'c_ben_5', categoria: 'Benjamín ♂', pos: 5, equipo: 'C.D. Rafael Altamira Picanya', pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 12, pts: 0, dif: -10, escudo: '' },
-  { id: 'c_ale_1', categoria: 'Alevín ♂', pos: 1, equipo: "S.D. San Pedro Pascual 'A'", pj: 2, pg: 2, pe: 0, pp: 0, gf: 16, gc: 5, pts: 6, dif: 11, escudo: '' },
-  { id: 'c_ale_3', categoria: 'Alevín ♂', pos: 3, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 1, pg: 0, pe: 0, pp: 1, gf: 2, gc: 9, pts: 0, dif: -7, escudo: '' },
-  { id: 'c_juv_1', categoria: 'Juvenil ♂', pos: 1, equipo: "C.D. Corbera Lambert Logística y Gestión Port. 'A'", pj: 9, pg: 8, pe: 1, pp: 0, gf: 59, gc: 10, pts: 25, dif: 49, escudo: '' },
-  { id: 'c_juv_2', categoria: 'Juvenil ♂', pos: 2, equipo: "C.F.S. Aliança Quart de Poblet 'A'", pj: 9, pg: 7, pe: 1, pp: 1, gf: 45, gc: 16, pts: 22, dif: 29, escudo: '' },
-  { id: 'c_juv_16', categoria: 'Juvenil ♂', pos: 16, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 9, pg: 0, pe: 0, pp: 9, gf: 16, gc: 42, pts: 0, dif: -26, escudo: '' },
-  { id: 'c_copa_1', categoria: 'Copa Valenta ♀', pos: 1, equipo: 'Santa Ana Algemesí C.D.', pj: 2, pg: 2, pe: 0, pp: 0, gf: 12, gc: 3, pts: 6, dif: 9, escudo: '' },
-  { id: 'c_copa_2', categoria: 'Copa Valenta ♀', pos: 2, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 2, pg: 1, pe: 0, pp: 1, gf: 7, gc: 6, pts: 3, dif: 1, escudo: '' },
-  { id: 'c_prom_1', categoria: 'Promoción Valenta ♀', pos: 1, equipo: 'C.D. Inter Marjal', pj: 7, pg: 7, pe: 0, pp: 0, gf: 43, gc: 3, pts: 21, dif: 40, escudo: '' },
-  { id: 'c_prom_5', categoria: 'Promoción Valenta ♀', pos: 5, equipo: "C.D. Rafael Altamira Picanya 'A'", pj: 7, pg: 3, pe: 0, pp: 4, gf: 12, gc: 26, pts: 9, dif: -14, escudo: '' }
-];
+const DEMO_CLASIFICACION = [];
 
 const DEMO_PLANTILLA = [
   { id: 'p1', dorsal: '10', nombre: 'Marc Navarro', posicion: 'Pívot', categoria: 'Juvenil ♂', edad: '17', goles: 14, foto: '', telefono: '' },
@@ -1369,6 +1356,8 @@ export default function App() {
   const [firebaseOk, setFirebaseOk] = useState(false);
   const [refrescandoDatos, setRefrescandoDatos] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [mostrarPegarClasificacion, setMostrarPegarClasificacion] = useState(false);
+  const [textoPegadoClasificacion, setTextoPegadoClasificacion] = useState('');
   const [fuentesSincronizacion] = useState(() => {
     const guardadas = leerListaLocal('cdra_fuentes_categorias', FUENTES_CATEGORIAS_CLUB);
     if (Array.isArray(guardadas) && guardadas.length > 0 && guardadas[0]?.url) {
@@ -1624,11 +1613,9 @@ export default function App() {
         guardarLocalSeguro('cdra_partidos_local', docsPartidos);
       }
 
-      if (!snapClasif.empty) {
-        const docsClasif = snapClasif.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setClasificacion(docsClasif);
-        guardarLocalSeguro('cdra_clasificacion_local', docsClasif);
-      }
+      const docsClasif = snapClasif.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setClasificacion(docsClasif);
+      guardarLocalSeguro('cdra_clasificacion_local', docsClasif);
 
       if (!snapPlantilla.empty) {
         const docsPlantilla = snapPlantilla.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -2602,6 +2589,29 @@ export default function App() {
     return nuevosConId.length + actualizadosFirestore.length;
   };
 
+  const handleGuardarClasificacionPegada = async (e) => {
+    e.preventDefault();
+    const catDestino = categoriaActiva || CATEGORIAS_VISIBLES_CLUB[0];
+    const filasDetectadas = parsearClasificacionDesdeTexto(textoPegadoClasificacion, catDestino);
+
+    if (filasDetectadas.length === 0) {
+      alert(
+        'No se han detectado filas de clasificación. Copia la tabla desde Futbuteo (posición, equipo y números) y pégala en el cuadro.'
+      );
+      return;
+    }
+
+    setSincronizandoUrls(true);
+    try {
+      const procesados = await registrarClasificacionSinDuplicar(filasDetectadas, catDestino);
+      setTextoPegadoClasificacion('');
+      setMostrarPegarClasificacion(false);
+      alert(`¡Clasificación guardada (${procesados} equipo(s)) en ${catDestino}!`);
+    } finally {
+      setSincronizandoUrls(false);
+    }
+  };
+
   const handleSubirEscudoEquipo = async (equipoItem, file) => {
     if (!isAdmin || !file) return;
     procesarFotoCircular(file, async (dataUrl) => {
@@ -2861,7 +2871,7 @@ export default function App() {
           ? ` (HTML: ${debugInfo.htmlLength} bytes, filas <tr>: ${debugInfo.trCount})`
           : '';
         alert(
-          `Futbuteo no ha devuelto filas en la respuesta directa para ${catDestino}${detalle}. Si carga la tabla con JavaScript, habrá que extraerla desde el navegador o una fuente JSON/API.`
+          `Futbuteo no ha devuelto filas en la respuesta directa para ${catDestino}${detalle}. Pulsa "+ Pegar tabla" para pegar la clasificación copiada desde Futbuteo.`
         );
       }
     } finally {
@@ -3017,12 +3027,8 @@ export default function App() {
     const filtradas = clasificacion.filter(
       (c) => normalizarCategoria(c.categoria) === catNorm
     );
-    const fuenteClasif =
-      filtradas.length > 0
-        ? filtradas
-        : DEMO_CLASIFICACION.filter((c) => normalizarCategoria(c.categoria) === catNorm);
 
-    return [...fuenteClasif].sort((a, b) => {
+    return [...filtradas].sort((a, b) => {
       if (Number(b.pts || 0) !== Number(a.pts || 0)) {
         return Number(b.pts || 0) - Number(a.pts || 0);
       }
@@ -3862,20 +3868,61 @@ export default function App() {
             <div className="section-header">
               <h2 className="section-title"><Trophy size={19} /> Clasificación y Goles</h2>
               {ligaSubtab === 'tabla' && (
-                <button
-                  type="button"
-                  className="btn-rsvp"
-                  disabled={sincronizandoUrls || refrescandoDatos}
-                  onClick={handleActualizarClasificacion}
-                  title="Actualizar clasificación de la categoría activa"
-                >
-                  <RefreshCw size={14} />
-                  {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
-                </button>
+                <div className="section-header-actions">
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => setMostrarPegarClasificacion((prev) => !prev)}
+                    title="Pegar tabla copiada desde Futbuteo"
+                  >
+                    <ClipboardPaste size={14} />
+                    + Pegar tabla
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    disabled={sincronizandoUrls || refrescandoDatos}
+                    onClick={handleActualizarClasificacion}
+                    title="Actualizar clasificación de la categoría activa"
+                  >
+                    <RefreshCw size={14} />
+                    {sincronizandoUrls || refrescandoDatos ? 'Actualizando...' : 'Actualizar'}
+                  </button>
+                </div>
               )}
             </div>
 
             {ligaSubtab === 'tabla' && renderSelectorCategorias()}
+
+            {ligaSubtab === 'tabla' && mostrarPegarClasificacion && (
+              <form className="card form-box" onSubmit={handleGuardarClasificacionPegada}>
+                <div className="info-card-title">
+                  Pegar tabla de clasificación · <TextoConSignoGenero texto={categoriaActiva} />
+                </div>
+                <div className="info-card-sub">
+                  Copia las filas de la clasificación desde Futbuteo en tu móvil y pégalas aquí debajo:
+                </div>
+                <textarea
+                  rows="7"
+                  placeholder={'1 C.D. Corbera Lambert... 9 8 1 0 59 10 25\n2 F.S. Picassent \'B\' 9 7 1 1 50 23 22'}
+                  value={textoPegadoClasificacion}
+                  onChange={(e) => setTextoPegadoClasificacion(e.target.value)}
+                  required
+                />
+                <div className="edit-aviso-actions">
+                  <button type="submit" className="btn-primary" disabled={sincronizandoUrls}>
+                    {sincronizandoUrls ? 'Guardando...' : 'Guardar clasificación'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-rsvp"
+                    onClick={() => setMostrarPegarClasificacion(false)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
 
             <div className="subtabs">
               <button className={`subtab ${ligaSubtab === 'tabla' ? 'active' : ''}`} onClick={() => setLigaSubtab('tabla')}>
@@ -3887,83 +3934,89 @@ export default function App() {
             </div>
 
             {ligaSubtab === 'tabla' && (
-              <div className="card table-wrap league-table-wrap">
-                <table className="league-table">
-                  <thead>
-                    <tr>
-                      <th className="col-pos">#</th>
-                      <th className="col-team">Equipo</th>
-                      <th className="col-stat">PJ</th>
-                      <th className="col-stat">PG</th>
-                      <th className="col-stat">PE</th>
-                      <th className="col-stat">PP</th>
-                      <th className="col-stat">GF</th>
-                      <th className="col-stat">GC</th>
-                      <th className="col-stat">Dif</th>
-                      <th className="col-stat">Pts</th>
-                      {isAdmin && <th className="col-action"></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clasificacionFiltrada.map((c, idx) => {
-                      const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
-                      const gf = Number(c.gf || 0);
-                      const gc = Number(c.gc || 0);
-                      const dif = calcularDifClasificacion(gf, gc, c.dif);
-                      return (
-                        <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
-                          <td className="col-pos col-pos-bold">
-                            {c.pos || idx + 1}
-                          </td>
-                          <td className="col-team">
-                            <div className="team-cell-inner">
-                              <AvatarCircular
-                                src={c.escudo}
-                                alt={nombreLimpio}
-                                letra={nombreLimpio?.[0] || 'E'}
-                                tamano={24}
-                              />
-                              <span title={nombreLimpio} className="team-name-truncate">
-                                {nombreLimpio}
-                              </span>
-                              {isAdmin && (
-                                <label className="shield-upload-btn" title="Subir escudo del equipo">
-                                  <Camera size={11} />
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="file-input-hidden"
-                                    onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          </td>
-                          <td className="col-stat">{c.pj ?? 0}</td>
-                          <td className="col-stat">{c.pg ?? 0}</td>
-                          <td className="col-stat">{c.pe ?? 0}</td>
-                          <td className="col-stat">{c.pp ?? 0}</td>
-                          <td className="col-stat">{gf}</td>
-                          <td className="col-stat">{gc}</td>
-                          <td className="col-stat col-dif-bold">
-                            {formatearDif(dif)}
-                          </td>
-                          <td className="col-stat">
-                            <strong className="pts-highlight">{c.pts ?? 0}</strong>
-                          </td>
-                          {isAdmin && (
-                            <td className="col-action">
-                              <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
-                                <Trash2 size={12} />
-                              </button>
+              clasificacionFiltrada.length === 0 ? (
+                <div className="card empty-state-card">
+                  No hay equipos en la clasificación de <TextoConSignoGenero texto={categoriaActiva} />. Pulsa <strong>+ Pegar tabla</strong> para cargarlos.
+                </div>
+              ) : (
+                <div className="card table-wrap league-table-wrap">
+                  <table className="league-table">
+                    <thead>
+                      <tr>
+                        <th className="col-pos">#</th>
+                        <th className="col-team">Equipo</th>
+                        <th className="col-stat">PJ</th>
+                        <th className="col-stat">PG</th>
+                        <th className="col-stat">PE</th>
+                        <th className="col-stat">PP</th>
+                        <th className="col-stat">GF</th>
+                        <th className="col-stat">GC</th>
+                        <th className="col-stat">Dif</th>
+                        <th className="col-stat">Pts</th>
+                        {isAdmin && <th className="col-action"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clasificacionFiltrada.map((c, idx) => {
+                        const nombreLimpio = sanearNombreEquipoTabla([c.equipo]);
+                        const gf = Number(c.gf || 0);
+                        const gc = Number(c.gc || 0);
+                        const dif = calcularDifClasificacion(gf, gc, c.dif);
+                        return (
+                          <tr key={c.id} className={nombreLimpio.toLowerCase().includes('altamira') ? 'highlight-row' : ''}>
+                            <td className="col-pos col-pos-bold">
+                              {c.pos || idx + 1}
                             </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            <td className="col-team">
+                              <div className="team-cell-inner">
+                                <AvatarCircular
+                                  src={c.escudo}
+                                  alt={nombreLimpio}
+                                  letra={nombreLimpio?.[0] || 'E'}
+                                  tamano={24}
+                                />
+                                <span title={nombreLimpio} className="team-name-truncate">
+                                  {nombreLimpio}
+                                </span>
+                                {isAdmin && (
+                                  <label className="shield-upload-btn" title="Subir escudo del equipo">
+                                    <Camera size={11} />
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="file-input-hidden"
+                                      onChange={(e) => handleSubirEscudoEquipo(c, e.target.files[0])}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            </td>
+                            <td className="col-stat">{c.pj ?? 0}</td>
+                            <td className="col-stat">{c.pg ?? 0}</td>
+                            <td className="col-stat">{c.pe ?? 0}</td>
+                            <td className="col-stat">{c.pp ?? 0}</td>
+                            <td className="col-stat">{gf}</td>
+                            <td className="col-stat">{gc}</td>
+                            <td className="col-stat col-dif-bold">
+                              {formatearDif(dif)}
+                            </td>
+                            <td className="col-stat">
+                              <strong className="pts-highlight">{c.pts ?? 0}</strong>
+                            </td>
+                            {isAdmin && (
+                              <td className="col-action">
+                                <button className="btn-danger" onClick={() => handleDelete('clasificacion', c.id)}>
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
             )}
 
             {ligaSubtab === 'goles' && (
